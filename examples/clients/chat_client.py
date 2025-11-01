@@ -26,6 +26,7 @@ from dotenv import (
 from examples.support.media_handler import (
     create_openai_image_url,
     decode_binary_file,
+    describe_audio_content,
     display_audio_content,
     display_content_from_uri,
     display_image_content,
@@ -67,8 +68,9 @@ def handle_content_block(
         print("[Result] Image content received")
         display_image_content(content_block)
     elif isinstance(content_block, AudioContent):
-        print("[Result] Audio content received")
+        print(f"[Result] Audio content received ({content_block.mimeType})")
         display_audio_content(content_block)
+        print()  # Add newline for consistency
     elif isinstance(content_block, EmbeddedResource):
         print(f"[Result] Embedded resource: {content_block.resource}")
         # Optionally save to file
@@ -90,8 +92,8 @@ def convert_mcp_content_to_openai(
 
     Args:
         content_block: Content block from MCP tool result.
-        for_tool_response: If True, convert images to text descriptions since
-                          OpenAI doesn't allow images in tool role messages.
+        for_tool_response: If True, convert images/audio to text descriptions since
+                          OpenAI doesn't allow media in tool role messages.
 
     Returns:
         OpenAI-compatible content dictionary.
@@ -104,8 +106,12 @@ def convert_mcp_content_to_openai(
             return {"type": "text", "text": f"[Image: {content_block.mimeType} received]"}
         return {"type": "image_url", "image_url": {"url": create_openai_image_url(content_block)}}
     if isinstance(content_block, AudioContent):
-        # OpenAI doesn't support audio in messages, so convert to text description
-        return {"type": "text", "text": f"[Audio content: {content_block.mimeType}]"}
+        # Audio can be included in OpenAI messages (gpt-4o-audio-preview supports it)
+        # but NOT in tool role messages. Tool messages must be text-only.
+        if for_tool_response:
+            return {"type": "text", "text": describe_audio_content(content_block)}
+        # For future: return audio format for user/assistant messages when we integrate audio API
+        return {"type": "text", "text": f"[Audio: {content_block.mimeType}]"}
     if isinstance(content_block, EmbeddedResource):
         return {"type": "text", "text": f"[Embedded resource: {content_block.resource}]"}
     if isinstance(content_block, ResourceLink):

@@ -72,6 +72,18 @@ def create_openai_image_url(image_content: ImageContent) -> str:
     return f"data:{image_content.mimeType};base64,{image_content.data}"
 
 
+def describe_audio_content(audio_content: AudioContent) -> str:
+    """Create a text description of audio content for tool responses.
+
+    Args:
+        audio_content: AudioContent object with audio data and MIME type.
+
+    Returns:
+        Text description suitable for OpenAI tool responses.
+    """
+    return f"[Audio: {audio_content.mimeType}, played locally]"
+
+
 def open_file_with_system_default(file_path: str) -> None:
     """Open a file with the system's default application."""
     import platform
