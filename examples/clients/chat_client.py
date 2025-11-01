@@ -11,11 +11,38 @@ import os
 import re
 import traceback
 from contextlib import AsyncExitStack
-from typing import Any, Dict, List, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    Union,
+)
 from urllib.parse import quote
 
-from dotenv import find_dotenv, load_dotenv
-from mcp.types import Prompt, Resource, ResourceTemplate, Tool
+from dotenv import (
+    find_dotenv,
+    load_dotenv,
+)
+from examples.support.media_handler import (
+    create_openai_image_url,
+    decode_binary_file,
+    display_audio_content,
+    display_content_from_uri,
+    display_image_content,
+)
+from mcp.types import (
+    AudioContent,
+    CallToolResult,
+    ContentBlock,
+    EmbeddedResource,
+    ImageContent,
+    Prompt,
+    Resource,
+    ResourceLink,
+    ResourceTemplate,
+    TextContent,
+    Tool,
+)
 from mcp_multi_server import MultiServerClient
 from openai import OpenAI
 
@@ -24,6 +51,88 @@ load_dotenv(find_dotenv())
 assert os.getenv("OPENAI_API_KEY"), "Error: OPENAI_API_KEY not found in environment"
 
 MODEL = "gpt-4o"
+
+
+def handle_content_block(
+    content_block: ContentBlock,
+) -> None:
+    """Display a content block to the user based on its type.
+
+    Args:
+        content_block: Content block from MCP tool result or prompt.
+    """
+    if isinstance(content_block, TextContent):
+        print(f"[Result] {content_block.text}\n")
+    elif isinstance(content_block, ImageContent):
+        print("[Result] Image content received")
+        display_image_content(content_block)
+    elif isinstance(content_block, AudioContent):
+        print("[Result] Audio content received")
+        display_audio_content(content_block)
+    elif isinstance(content_block, EmbeddedResource):
+        print(f"[Result] Embedded resource: {content_block.resource}")
+        # Optionally save to file
+        filename = input("Enter filename to save embedded resource (or press Enter to skip): ").strip()
+        if filename:
+            decode_binary_file(content_block, filename)
+    elif isinstance(content_block, ResourceLink):
+        print(f"[Result] Resource link: {content_block.uri}")
+        display_content_from_uri(content_block)
+    else:
+        print(f"[Result] {str(content_block)}\n")
+
+
+def convert_mcp_content_to_openai(
+    content_block: ContentBlock,
+    for_tool_response: bool = False,
+) -> Dict[str, Any]:
+    """Convert MCP content block to OpenAI message content format.
+
+    Args:
+        content_block: Content block from MCP tool result.
+        for_tool_response: If True, convert images to text descriptions since
+                          OpenAI doesn't allow images in tool role messages.
+
+    Returns:
+        OpenAI-compatible content dictionary.
+    """
+    if isinstance(content_block, TextContent):
+        return {"type": "text", "text": content_block.text}
+    if isinstance(content_block, ImageContent):
+        # OpenAI only allows images in user/assistant messages, not tool messages
+        if for_tool_response:
+            return {"type": "text", "text": f"[Image: {content_block.mimeType} received]"}
+        return {"type": "image_url", "image_url": {"url": create_openai_image_url(content_block)}}
+    if isinstance(content_block, AudioContent):
+        # OpenAI doesn't support audio in messages, so convert to text description
+        return {"type": "text", "text": f"[Audio content: {content_block.mimeType}]"}
+    if isinstance(content_block, EmbeddedResource):
+        return {"type": "text", "text": f"[Embedded resource: {content_block.resource}]"}
+    if isinstance(content_block, ResourceLink):
+        return {"type": "text", "text": f"[Resource link: {content_block.uri}]"}
+    return {"type": "text", "text": str(content_block)}
+
+
+def process_tool_result_content(tool_result: CallToolResult) -> str:
+    """Process tool result content blocks and convert to OpenAI tool response format.
+
+    Args:
+        tool_result: CallToolResult from MCP server.
+
+    Returns:
+        String content for OpenAI tool response (images converted to text descriptions).
+    """
+    text_parts = []
+
+    for content_block in tool_result.content:
+        # Display to user (shows images locally)
+        handle_content_block(content_block)
+        # Convert to OpenAI format (for_tool_response=True converts images to text)
+        converted = convert_mcp_content_to_openai(content_block, for_tool_response=True)
+        text_parts.append(converted["text"])
+
+    # Join all parts into a single string (required for tool role messages)
+    return "\n".join(text_parts) if text_parts else ""
 
 
 async def search_and_instantiate_prompt(client: MultiServerClient, prompts: List[Prompt], name: str) -> str:
@@ -260,22 +369,17 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
                         try:
                             tool_result = await client.call_tool(tool_name, tool_args)
 
-                            # Handle different content types
-                            # Extract text content
-                            result_text = (
-                                tool_result.content[0].text
-                                if hasattr(tool_result.content[0], "text")
-                                else str(tool_result.content[0])
-                            )
-
-                            print(f"[Result] {result_text}\n")
+                            # Process tool result content (handles images, audio, text, etc.)
+                            # Returns string content (images are converted to text descriptions)
+                            result_content = process_tool_result_content(tool_result)
 
                             # Add tool response to conversation
+                            # Tool messages must always have string content (not arrays)
                             messages.append(
                                 {
                                     "role": "tool",
                                     "tool_call_id": tool_call.id,
-                                    "content": result_text,
+                                    "content": result_content,
                                 }
                             )
 

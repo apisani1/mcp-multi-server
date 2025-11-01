@@ -60,6 +60,18 @@ def get_audio(audio_path: str) -> tuple[str, str]:
     return base64.b64encode(audio_data).decode("utf-8"), mime_type
 
 
+def create_openai_image_url(image_content: ImageContent) -> str:
+    """Create an OpenAI-compatible data URL from ImageContent.
+
+    Args:
+        image_content: ImageContent object with base64 data and MIME type.
+
+    Returns:
+        Data URL string in format: "data:<mimeType>;base64,<data>"
+    """
+    return f"data:{image_content.mimeType};base64,{image_content.data}"
+
+
 def open_file_with_system_default(file_path: str) -> None:
     """Open a file with the system's default application."""
     import platform
