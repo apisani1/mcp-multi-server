@@ -20,14 +20,14 @@ from mcp.types import (
 
 
 try:
-    from .media_handler import (
+    from ..support.media_handler import (
         decode_binary_file,
         display_audio_content,
         display_content_from_uri,
         display_image_content,
     )
 except ImportError:
-    from ..support.media_handler import (
+    from examples.support.media_handler import (
         decode_binary_file,
         display_audio_content,
         display_content_from_uri,

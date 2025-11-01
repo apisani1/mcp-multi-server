@@ -49,7 +49,6 @@ from openai import OpenAI
 
 
 load_dotenv(find_dotenv())
-assert os.getenv("OPENAI_API_KEY"), "Error: OPENAI_API_KEY not found in environment"
 
 MODEL = "gpt-4o"
 
@@ -261,6 +260,7 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
     Args:
         config_path: Path to the server configuration file.
     """
+    assert os.getenv("OPENAI_API_KEY"), "Error: OPENAI_API_KEY not found in environment"
 
     try:
         async with AsyncExitStack() as stack:
