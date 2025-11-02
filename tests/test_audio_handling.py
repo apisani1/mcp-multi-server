@@ -51,10 +51,15 @@ async def test_audio_tool():
             converted = convert_mcp_content_to_openai(block, for_tool_response=True)
             print(f"   Type: {type(block).__name__} -> text: {converted['text']}")
 
-        print("\n   For user/assistant messages (audio as text - for now):")
+        print("\n   For user/assistant messages (audio as array):")
         for block in tool_result.content:
             converted = convert_mcp_content_to_openai(block, for_tool_response=False)
-            print(f"   Type: {type(block).__name__} -> text: {converted['text']}")
+            # For audio, this returns an array; for text it returns a string
+            if isinstance(converted, list):
+                print(f"   Type: {type(block).__name__} -> OpenAI format: array with {len(converted)} item(s)")
+                print(f"      First item: {converted[0]}")
+            else:
+                print(f"   Type: {type(block).__name__} -> OpenAI format: string (length: {len(converted)})")
 
         print("\n" + "=" * 80)
         print("Test completed successfully!")

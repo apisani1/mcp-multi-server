@@ -55,7 +55,12 @@ async def test_image_tool():
         print("\n   For user/assistant messages (images as image_url):")
         for block in tool_result.content:
             converted = convert_mcp_content_to_openai(block, for_tool_response=False)
-            print(f"   Type: {type(block).__name__} -> OpenAI type: {converted['type']}")
+            # For images, this returns an array; for text it returns a string
+            if isinstance(converted, list):
+                print(f"   Type: {type(block).__name__} -> OpenAI format: array with {len(converted)} item(s)")
+                print(f"      First item type: {converted[0]['type']}")
+            else:
+                print(f"   Type: {type(block).__name__} -> OpenAI format: string (length: {len(converted)})")
 
         print("\n" + "=" * 80)
         print("Test completed successfully!")

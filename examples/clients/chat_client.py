@@ -86,36 +86,58 @@ def handle_content_block(
 def convert_mcp_content_to_openai(
     content_block: ContentBlock,
     for_tool_response: bool = False,
-) -> Dict[str, Any]:
+) -> Union[str, List[Dict[str, Any]], Dict[str, Any]]:
     """Convert MCP content block to OpenAI message content format.
 
     Args:
-        content_block: Content block from MCP tool result.
-        for_tool_response: If True, convert images/audio to text descriptions since
-                          OpenAI doesn't allow media in tool role messages.
+        content_block: Content block from MCP tool result or prompt.
+        for_tool_response: If True, return format suitable for tool messages (always dict).
+                          If False, return format suitable for user/assistant messages
+                          (string for text, array for media).
 
     Returns:
-        OpenAI-compatible content dictionary.
+        For tool responses: Always returns dict with 'type' and 'text' keys.
+        For user/assistant messages: Returns string for text-only, array for media content.
     """
     if isinstance(content_block, TextContent):
-        return {"type": "text", "text": content_block.text}
+        # For tool responses, return dict format
+        if for_tool_response:
+            return {"type": "text", "text": content_block.text}
+        # For user/assistant messages, return plain string
+        return content_block.text
+
     if isinstance(content_block, ImageContent):
         # OpenAI only allows images in user/assistant messages, not tool messages
         if for_tool_response:
             return {"type": "text", "text": f"[Image: {content_block.mimeType} received]"}
-        return {"type": "image_url", "image_url": {"url": create_openai_image_url(content_block)}}
+        # For user/assistant, return array with image_url
+        return [{"type": "image_url", "image_url": {"url": create_openai_image_url(content_block)}}]
+
     if isinstance(content_block, AudioContent):
-        # Audio can be included in OpenAI messages (gpt-4o-audio-preview supports it)
-        # but NOT in tool role messages. Tool messages must be text-only.
+        # OpenAI only allows audio in user/assistant messages, not tool messages
         if for_tool_response:
             return {"type": "text", "text": describe_audio_content(content_block)}
         # For future: return audio format for user/assistant messages when we integrate audio API
-        return {"type": "text", "text": f"[Audio: {content_block.mimeType}]"}
+        # For now, return text description in array format
+        return [{"type": "text", "text": f"[Audio: {content_block.mimeType}]"}]
+
     if isinstance(content_block, EmbeddedResource):
-        return {"type": "text", "text": f"[Embedded resource: {content_block.resource}]"}
+        text = f"[Embedded resource: {content_block.resource}]"
+        if for_tool_response:
+            return {"type": "text", "text": text}
+        return text
+
     if isinstance(content_block, ResourceLink):
-        return {"type": "text", "text": f"[Resource link: {content_block.uri}]"}
-    return {"type": "text", "text": str(content_block)}
+        text = f"[Resource link: {content_block.uri}]"
+        if for_tool_response:
+            return {"type": "text", "text": text}
+        return text
+
+    # Unknown content type
+    text = str(content_block)
+    if for_tool_response:
+        return {"type": "text", "text": text}
+    return text
 
 
 def process_tool_result_content(tool_result: CallToolResult) -> str:
@@ -140,8 +162,10 @@ def process_tool_result_content(tool_result: CallToolResult) -> str:
     return "\n".join(text_parts) if text_parts else ""
 
 
-async def search_and_instantiate_prompt(client: MultiServerClient, prompts: List[Prompt], name: str) -> str:
-    """Retrieve a prompt by name from the list of prompts.
+async def search_and_instantiate_prompt(
+    client: MultiServerClient, prompts: List[Prompt], name: str
+) -> List[Dict[str, Any]]:
+    """Retrieve a prompt by name and convert to OpenAI message format.
 
     Args:
         client: MultiServerClient instance.
@@ -149,16 +173,29 @@ async def search_and_instantiate_prompt(client: MultiServerClient, prompts: List
         name: Name of the prompt to retrieve.
 
     Returns:
-        The prompt text.
+        List of OpenAI-formatted messages with proper image/audio support.
 
     """
     if prompts:
         for prompt in prompts:
             if prompt.name == name:
                 prompt_result = await client.get_prompt(name, arguments=get_prompt_arguments(prompt))
-                # Assuming single text message prompt
-                return prompt_result.messages[0].content.text if prompt_result.messages else ""  # type: ignore[union-attr]
-    return ""
+
+                if not prompt_result.messages:
+                    return []
+
+                openai_messages = []
+                for msg in prompt_result.messages:
+                    # Display content to user (shows images/audio locally)
+                    handle_content_block(msg.content)
+
+                    # Convert to OpenAI format (returns proper format automatically)
+                    content = convert_mcp_content_to_openai(msg.content, for_tool_response=False)
+
+                    openai_messages.append({"role": msg.role, "content": content})
+
+                return openai_messages
+    return []
 
 
 def get_prompt_arguments(prompt: Prompt) -> dict[str, str]:
@@ -307,14 +344,14 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
 
                 # Add user message, prompt or resource
                 if query.startswith("+prompt:"):
-                    prompt = await search_and_instantiate_prompt(client, all_prompts, query[len("+prompt:") :].strip())
-                    if not prompt:
-                        print(f"Prompt '{query[len('+prompt:') :].strip()}' not found.")
+                    prompt = query[len("+prompt:") :].strip()
+                    prompt_messages = await search_and_instantiate_prompt(client, all_prompts, prompt)
+                    if not prompt_messages:
+                        print(f"Prompt '{prompt}' not found.")
                     else:
-
-                        print(f"****Retrieved prompt content:\n{prompt}\n")
-
-                        messages.append({"role": "user", "content": prompt})
+                        print("****Retrieved prompt content (displayed above)\n")
+                        # Add all prompt messages to conversation (supports multiple messages)
+                        messages.extend(prompt_messages)
                     query = input("> ")
                     continue
 
