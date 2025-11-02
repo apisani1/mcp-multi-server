@@ -119,7 +119,8 @@ def convert_mcp_content_to_openai(
             return {"type": "text", "text": describe_audio_content(content_block)}
         # For future: return audio format for user/assistant messages when we integrate audio API
         # For now, return text description in array format
-        return [{"type": "text", "text": f"[Audio: {content_block.mimeType}]"}]
+        # Note: Standard GPT-4 cannot process audio, so we inform the LLM it was played locally only
+        return [{"type": "text", "text": f"[Audio content ({content_block.mimeType}) was played locally for the user but cannot be processed by the AI]"}]
 
     if isinstance(content_block, EmbeddedResource):
         text = f"[Embedded resource: {content_block.resource}]"
