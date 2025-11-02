@@ -16,6 +16,7 @@ from typing import (
     Dict,
     List,
     Union,
+    cast,
 )
 from urllib.parse import quote
 
@@ -120,7 +121,12 @@ def convert_mcp_content_to_openai(
         # For future: return audio format for user/assistant messages when we integrate audio API
         # For now, return text description in array format
         # Note: Standard GPT-4 cannot process audio, so we inform the LLM it was played locally only
-        return [{"type": "text", "text": f"[Audio content ({content_block.mimeType}) was played locally for the user but cannot be processed by the AI]"}]
+        return [
+            {
+                "type": "text",
+                "text": f"[Audio content ({content_block.mimeType}) was played locally for the user but cannot be processed by the AI]",
+            }
+        ]
 
     if isinstance(content_block, EmbeddedResource):
         text = f"[Embedded resource: {content_block.resource}]"
@@ -157,7 +163,7 @@ def process_tool_result_content(tool_result: CallToolResult) -> str:
         handle_content_block(content_block)
         # Convert to OpenAI format (for_tool_response=True converts images to text)
         converted = convert_mcp_content_to_openai(content_block, for_tool_response=True)
-        text_parts.append(converted["text"])
+        text_parts.append(cast(Dict[str, Any], converted)["text"])
 
     # Join all parts into a single string (required for tool role messages)
     return "\n".join(text_parts) if text_parts else ""
@@ -298,6 +304,7 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
     Args:
         config_path: Path to the server configuration file.
     """
+
     assert os.getenv("OPENAI_API_KEY"), "Error: OPENAI_API_KEY not found in environment"
 
     try:
