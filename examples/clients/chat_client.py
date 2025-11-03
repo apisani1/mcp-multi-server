@@ -16,7 +16,6 @@ from typing import (
     Dict,
     List,
     Union,
-    cast,
 )
 from urllib.parse import quote
 
@@ -28,7 +27,7 @@ from examples.support.media_handler import (
     create_openai_image_url,
     decode_binary_file,
     describe_audio_content,
-    display_audio_content,
+    play_audio_content,
     display_content_from_uri,
     display_image_content,
 )
@@ -69,8 +68,7 @@ def handle_content_block(
         display_image_content(content_block)
     elif isinstance(content_block, AudioContent):
         print(f"[Result] Audio content received ({content_block.mimeType})")
-        display_audio_content(content_block)
-        print()  # Add newline for consistency
+        play_audio_content(content_block)
     elif isinstance(content_block, EmbeddedResource):
         print(f"[Result] Embedded resource: {content_block.resource}")
         # Optionally save to file
@@ -84,43 +82,63 @@ def handle_content_block(
         print(f"[Result] {str(content_block)}\n")
 
 
-def convert_mcp_content_to_openai(
+def convert_mcp_content_to_tool_response(
     content_block: ContentBlock,
-    for_tool_response: bool = False,
-) -> Union[str, List[Dict[str, Any]], Dict[str, Any]]:
-    """Convert MCP content block to OpenAI message content format.
+) -> Dict[str, Any]:
+    """Convert MCP content block to OpenAI tool message format.
+
+    Tool messages must always be text-only (no images/audio arrays).
+    Images and audio are converted to text descriptions.
 
     Args:
-        content_block: Content block from MCP tool result or prompt.
-        for_tool_response: If True, return format suitable for tool messages (always dict).
-                          If False, return format suitable for user/assistant messages
-                          (string for text, array for media).
+        content_block: Content block from MCP tool result.
 
     Returns:
-        For tool responses: Always returns dict with 'type' and 'text' keys.
-        For user/assistant messages: Returns string for text-only, array for media content.
+        Dict with 'type' and 'text' keys, suitable for OpenAI tool messages.
     """
     if isinstance(content_block, TextContent):
-        # For tool responses, return dict format
-        if for_tool_response:
-            return {"type": "text", "text": content_block.text}
-        # For user/assistant messages, return plain string
+        return {"type": "text", "text": content_block.text}
+
+    if isinstance(content_block, ImageContent):
+        return {"type": "text", "text": f"[Image: {content_block.mimeType} received]"}
+
+    if isinstance(content_block, AudioContent):
+        return {"type": "text", "text": describe_audio_content(content_block)}
+
+    if isinstance(content_block, EmbeddedResource):
+        return {"type": "text", "text": f"[Embedded resource: {content_block.resource}]"}
+
+    if isinstance(content_block, ResourceLink):
+        return {"type": "text", "text": f"[Resource link: {content_block.uri}]"}
+
+    # Unknown content type
+    return {"type": "text", "text": str(content_block)}
+
+
+def convert_mcp_content_to_message(
+    content_block: ContentBlock,
+) -> Union[str, List[Dict[str, Any]]]:
+    """Convert MCP content block to OpenAI user/assistant message format.
+
+    Returns plain string for text content, array for media content (images/audio).
+    This format is suitable for user and assistant messages, which can include
+    rich media content that OpenAI's vision API can process.
+
+    Args:
+        content_block: Content block from MCP prompt or resource.
+
+    Returns:
+        String for text-only content, array for media content.
+    """
+    if isinstance(content_block, TextContent):
         return content_block.text
 
     if isinstance(content_block, ImageContent):
-        # OpenAI only allows images in user/assistant messages, not tool messages
-        if for_tool_response:
-            return {"type": "text", "text": f"[Image: {content_block.mimeType} received]"}
-        # For user/assistant, return array with image_url
+        # Return array with image_url for OpenAI vision API
         return [{"type": "image_url", "image_url": {"url": create_openai_image_url(content_block)}}]
 
     if isinstance(content_block, AudioContent):
-        # OpenAI only allows audio in user/assistant messages, not tool messages
-        if for_tool_response:
-            return {"type": "text", "text": describe_audio_content(content_block)}
-        # For future: return audio format for user/assistant messages when we integrate audio API
-        # For now, return text description in array format
-        # Note: Standard GPT-4 cannot process audio, so we inform the LLM it was played locally only
+        # Standard GPT-4 cannot process audio, inform the LLM it was played locally
         return [
             {
                 "type": "text",
@@ -129,22 +147,13 @@ def convert_mcp_content_to_openai(
         ]
 
     if isinstance(content_block, EmbeddedResource):
-        text = f"[Embedded resource: {content_block.resource}]"
-        if for_tool_response:
-            return {"type": "text", "text": text}
-        return text
+        return f"[Embedded resource: {content_block.resource}]"
 
     if isinstance(content_block, ResourceLink):
-        text = f"[Resource link: {content_block.uri}]"
-        if for_tool_response:
-            return {"type": "text", "text": text}
-        return text
+        return f"[Resource link: {content_block.uri}]"
 
     # Unknown content type
-    text = str(content_block)
-    if for_tool_response:
-        return {"type": "text", "text": text}
-    return text
+    return str(content_block)
 
 
 def process_tool_result_content(tool_result: CallToolResult) -> str:
@@ -161,9 +170,9 @@ def process_tool_result_content(tool_result: CallToolResult) -> str:
     for content_block in tool_result.content:
         # Display to user (shows images locally)
         handle_content_block(content_block)
-        # Convert to OpenAI format (for_tool_response=True converts images to text)
-        converted = convert_mcp_content_to_openai(content_block, for_tool_response=True)
-        text_parts.append(cast(Dict[str, Any], converted)["text"])
+        # Convert to OpenAI tool format (always returns dict with 'text' key)
+        converted = convert_mcp_content_to_tool_response(content_block)
+        text_parts.append(converted["text"])
 
     # Join all parts into a single string (required for tool role messages)
     return "\n".join(text_parts) if text_parts else ""
@@ -196,8 +205,8 @@ async def search_and_instantiate_prompt(
                     # Display content to user (shows images/audio locally)
                     handle_content_block(msg.content)
 
-                    # Convert to OpenAI format (returns proper format automatically)
-                    content = convert_mcp_content_to_openai(msg.content, for_tool_response=False)
+                    # Convert to OpenAI message format (string for text, array for media)
+                    content = convert_mcp_content_to_message(msg.content)
 
                     openai_messages.append({"role": msg.role, "content": content})
 

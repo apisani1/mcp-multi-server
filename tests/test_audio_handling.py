@@ -10,7 +10,8 @@ from dotenv import (
 )
 
 from examples.clients.chat_client import (
-    convert_mcp_content_to_openai,
+    convert_mcp_content_to_message,
+    convert_mcp_content_to_tool_response,
     process_tool_result_content,
 )
 from mcp_multi_server import MultiServerClient
@@ -48,12 +49,12 @@ async def test_audio_tool():
         print("\n5. Testing individual content block conversion...")
         print("   For tool responses (audio as text):")
         for block in tool_result.content:
-            converted = convert_mcp_content_to_openai(block, for_tool_response=True)
+            converted = convert_mcp_content_to_tool_response(block)
             print(f"   Type: {type(block).__name__} -> text: {converted['text']}")
 
         print("\n   For user/assistant messages (audio as array):")
         for block in tool_result.content:
-            converted = convert_mcp_content_to_openai(block, for_tool_response=False)
+            converted = convert_mcp_content_to_message(block)
             # For audio, this returns an array; for text it returns a string
             if isinstance(converted, list):
                 print(f"   Type: {type(block).__name__} -> OpenAI format: array with {len(converted)} item(s)")
