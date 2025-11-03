@@ -24,9 +24,7 @@ from dotenv import (
     load_dotenv,
 )
 from examples.support.media_handler import (
-    create_openai_image_url,
     decode_binary_file,
-    describe_audio_content,
     play_audio_content,
     display_content_from_uri,
     display_image_content,
@@ -70,11 +68,15 @@ def handle_content_block(
         print(f"[Result] Audio content received ({content_block.mimeType})")
         play_audio_content(content_block)
     elif isinstance(content_block, EmbeddedResource):
-        print(f"[Result] Embedded resource: {content_block.resource}")
+
+        if hasattr(content_block.resource, "text"):
+            print(f"[Result] Embedded resource text: {content_block.resource.text}\n")
+        else:
+            print("[Result] Embedded resource blob")
         # Optionally save to file
-        filename = input("Enter filename to save embedded resource (or press Enter to skip): ").strip()
-        if filename:
-            decode_binary_file(content_block, filename)
+            filename = input("Enter filename to save embedded resource (or press Enter to skip): ").strip()
+            if filename:
+                decode_binary_file(content_block, filename)
     elif isinstance(content_block, ResourceLink):
         print(f"[Result] Resource link: {content_block.uri}")
         display_content_from_uri(content_block)
@@ -103,10 +105,12 @@ def convert_mcp_content_to_tool_response(
         return {"type": "text", "text": f"[Image: {content_block.mimeType} received]"}
 
     if isinstance(content_block, AudioContent):
-        return {"type": "text", "text": describe_audio_content(content_block)}
+        return {"type": "text", "text": f"[Audio: {content_block.mimeType} received]]"}
 
     if isinstance(content_block, EmbeddedResource):
-        return {"type": "text", "text": f"[Embedded resource: {content_block.resource}]"}
+        if hasattr(content_block.resource, "text"):
+            return {"type": "text", "text": content_block.resource.text}
+        return {"type": "text", "text": "[Embedded resource: binary data received]"}
 
     if isinstance(content_block, ResourceLink):
         return {"type": "text", "text": f"[Resource link: {content_block.uri}]"}
@@ -128,14 +132,16 @@ def convert_mcp_content_to_message(
         content_block: Content block from MCP prompt or resource.
 
     Returns:
-        String for text-only content, array for media content.
+        String for text-only content, array list for media content.
     """
     if isinstance(content_block, TextContent):
         return content_block.text
 
     if isinstance(content_block, ImageContent):
         # Return array with image_url for OpenAI vision API
-        return [{"type": "image_url", "image_url": {"url": create_openai_image_url(content_block)}}]
+        return [
+            {"type": "image_url", "image_url": {"url": f"data:{content_block.mimeType};base64,{content_block.data}"}}
+        ]
 
     if isinstance(content_block, AudioContent):
         # Standard GPT-4 cannot process audio, inform the LLM it was played locally
@@ -147,6 +153,8 @@ def convert_mcp_content_to_message(
         ]
 
     if isinstance(content_block, EmbeddedResource):
+        if hasattr(content_block.resource, "text"):
+            return content_block.resource.text
         return f"[Embedded resource: {content_block.resource}]"
 
     if isinstance(content_block, ResourceLink):

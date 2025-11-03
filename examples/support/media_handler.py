@@ -60,30 +60,6 @@ def get_audio(audio_path: str) -> tuple[str, str]:
     return base64.b64encode(audio_data).decode("utf-8"), mime_type
 
 
-def create_openai_image_url(image_content: ImageContent) -> str:
-    """Create an OpenAI-compatible data URL from ImageContent.
-
-    Args:
-        image_content: ImageContent object with base64 data and MIME type.
-
-    Returns:
-        Data URL string in format: "data:<mimeType>;base64,<data>"
-    """
-    return f"data:{image_content.mimeType};base64,{image_content.data}"
-
-
-def describe_audio_content(audio_content: AudioContent) -> str:
-    """Create a text description of audio content for tool responses.
-
-    Args:
-        audio_content: AudioContent object with audio data and MIME type.
-
-    Returns:
-        Text description suitable for OpenAI tool responses.
-    """
-    return f"[Audio: {audio_content.mimeType}, played locally]"
-
-
 def open_file_with_system_default(file_path: str) -> None:
     """Open a file with the system's default application."""
     import platform
@@ -123,7 +99,7 @@ def display_image_content(image_content: ImageContent) -> None:
         print(f"  Error displaying image: {e}")
 
 
-def display_audio_content(audio_content: AudioContent) -> None:
+def play_audio_content(audio_content: AudioContent) -> None:
     """Display/play an audio from AudioContent by decoding base64 data and playing it."""
     try:
         # Decode base64 audio data
@@ -157,7 +133,7 @@ def display_audio_content(audio_content: AudioContent) -> None:
             print(f"  Audio saved to: {temp_file_path}")
 
     except Exception as e:
-        print(f"  Error displaying audio: {e}")
+        print(f"  Error playing audio: {e}")
 
 
 def display_pdf_content(pdf_bytes: bytes, uri: str) -> None:
@@ -253,7 +229,7 @@ def display_content_from_uri(resource_link: ResourceLink) -> None:
             audio_content = AudioContent(
                 type="audio", data=base64.b64encode(content_bytes).decode("utf-8"), mimeType=mime_type
             )
-            display_audio_content(audio_content)
+            play_audio_content(audio_content)
         elif mime_type == "application/pdf":
             display_pdf_content(content_bytes, str(resource_link.uri))
         elif mime_type in ["text/html", "application/xhtml+xml"]:
