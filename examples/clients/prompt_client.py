@@ -22,14 +22,14 @@ from mcp.types import (
 try:
     from ..support.media_handler import (
         decode_binary_file,
-        display_audio_content,
+        play_audio_content,
         display_content_from_uri,
         display_image_content,
     )
 except ImportError:
     from examples.support.media_handler import (
         decode_binary_file,
-        display_audio_content,
+        play_audio_content,
         display_content_from_uri,
         display_image_content,
     )
@@ -86,7 +86,7 @@ def print_messages(messages: List[PromptMessage]) -> None:
             display_image_content(message.content)
         elif isinstance(message.content, AudioContent):
             print(f"  Content Type: audio, MIME Type: {message.content.mimeType}")
-            display_audio_content(message.content)
+            play_audio_content(message.content)
         elif isinstance(message.content, EmbeddedResource):
             print("  Content Type: embedded resource")
             # Ask user for output filename

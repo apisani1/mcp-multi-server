@@ -23,14 +23,14 @@ from mcp.types import (
 try:
     from ..support.media_handler import (
         decode_binary_file,
-        display_audio_content,
+        play_audio_content,
         display_content_from_uri,
         display_image_content,
     )
 except ImportError:
     from examples.support.media_handler import (
         decode_binary_file,
-        display_audio_content,
+        play_audio_content,
         display_content_from_uri,
         display_image_content,
     )
@@ -162,7 +162,7 @@ def print_tool_result(result: CallToolResult) -> None:
             display_image_content(block)
         elif isinstance(block, AudioContent):
             print(f"Content Type: audio, MIME Type: {block.mimeType}")
-            display_audio_content(block)
+            play_audio_content(block)
         elif isinstance(block, EmbeddedResource):
             print("Content Type: embedded resource")
             # Ask user for output filename
