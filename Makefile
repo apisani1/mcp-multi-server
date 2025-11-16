@@ -267,7 +267,7 @@ mcp-dev:
 		echo "Usage: makmake instae mcp-dev <filename> [additional_args...]"; \
 		exit 1; \
 	fi
-	@mcp dev src/mcp_multi_server/$(filter-out $@,$(MAKECMDGOALS))
+	@mcp dev $(filter-out $@,$(MAKECMDGOALS))
 
 %:
 	@:
