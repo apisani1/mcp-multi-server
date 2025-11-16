@@ -68,12 +68,10 @@ def handle_content_block(
         print(f"[Result] Audio content received ({content_block.mimeType})")
         play_audio_content(content_block)
     elif isinstance(content_block, EmbeddedResource):
-
         if hasattr(content_block.resource, "text"):
             print(f"[Result] Embedded resource text: {content_block.resource.text}\n")
         else:
             print("[Result] Embedded resource blob")
-        # Optionally save to file
             filename = input("Enter filename to save embedded resource (or press Enter to skip): ").strip()
             if filename:
                 decode_binary_file(content_block, filename)
@@ -155,6 +153,7 @@ def convert_mcp_content_to_message(
     if isinstance(content_block, EmbeddedResource):
         if hasattr(content_block.resource, "text"):
             return content_block.resource.text
+        # TODO: Handle other embedded resource types appropriately
         return f"[Embedded resource: {content_block.resource}]"
 
     if isinstance(content_block, ResourceLink):

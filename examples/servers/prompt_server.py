@@ -92,13 +92,16 @@ def load_file(file_path: str) -> List[Message]:
     """Loads a file and returns its contents as an embedded resource."""
     with open(file_path, "rb") as file:
         file_data = file.read()
+    encoded = base64.b64encode(file_data).decode("utf-8")
+    mime_type, _ = mimetypes.guess_type(file_path)
     return [
         UserMessage(
             content=EmbeddedResource(
                 type="resource",
                 resource=BlobResourceContents(
                     uri=f"file://{file_path}",  # type: ignore[arg-type]
-                    blob=base64.b64encode(file_data).decode("utf-8"),
+                    blob=encoded,
+                    mimeType=mime_type or "application/octet-stream",
                 ),
             )
         )
@@ -108,13 +111,14 @@ def load_file(file_path: str) -> List[Message]:
 @mcp.prompt()
 def send_content_uri(content_uri: str) -> List[Message]:
     """Sends a content URI as an resource link."""
+    mime_type, _ = mimetypes.guess_type(content_uri)
     return [
         UserMessage(
             content=ResourceLink(
                 type="resource_link",
                 name=content_uri.split("/")[-1],
                 uri=content_uri,  # type: ignore[arg-type]
-                mimeType=mimetypes.guess_type(content_uri)[0] or "application/octet-stream",
+                mimeType=mime_type or "application/octet-stream",
             )
         )
     ]
