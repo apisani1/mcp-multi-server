@@ -1,8 +1,8 @@
 """Tests for utility functions."""
 
 import pytest
-from mcp.types import Tool
 
+from mcp.types import Tool
 from mcp_multi_server.utils import (
     extract_template_variables,
     format_namespace_uri,
@@ -21,12 +21,7 @@ class TestMcpToolsToOpenaiFormat:
             Tool(
                 name="get_weather",
                 description="Get weather for a location",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "location": {"type": "string"}
-                    }
-                }
+                inputSchema={"type": "object", "properties": {"location": {"type": "string"}}},
             )
         ]
 
@@ -41,21 +36,9 @@ class TestMcpToolsToOpenaiFormat:
     def test_convert_multiple_tools(self) -> None:
         """Test converting multiple MCP tools to OpenAI format."""
         mcp_tools = [
-            Tool(
-                name="get_weather",
-                description="Get weather",
-                inputSchema={"type": "object", "properties": {}}
-            ),
-            Tool(
-                name="get_news",
-                description="Get news",
-                inputSchema={"type": "object", "properties": {}}
-            ),
-            Tool(
-                name="calculate",
-                description="Calculate",
-                inputSchema={"type": "object", "properties": {}}
-            )
+            Tool(name="get_weather", description="Get weather", inputSchema={"type": "object", "properties": {}}),
+            Tool(name="get_news", description="Get news", inputSchema={"type": "object", "properties": {}}),
+            Tool(name="calculate", description="Calculate", inputSchema={"type": "object", "properties": {}}),
         ]
 
         result = mcp_tools_to_openai_format(mcp_tools)
@@ -78,31 +61,14 @@ class TestMcpToolsToOpenaiFormat:
         complex_schema = {
             "type": "object",
             "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "City name"
-                },
-                "units": {
-                    "type": "string",
-                    "enum": ["celsius", "fahrenheit"],
-                    "default": "celsius"
-                },
-                "forecast_days": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 7
-                }
+                "location": {"type": "string", "description": "City name"},
+                "units": {"type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius"},
+                "forecast_days": {"type": "integer", "minimum": 1, "maximum": 7},
             },
-            "required": ["location"]
+            "required": ["location"],
         }
 
-        mcp_tools = [
-            Tool(
-                name="get_weather",
-                description="Get weather forecast",
-                inputSchema=complex_schema
-            )
-        ]
+        mcp_tools = [Tool(name="get_weather", description="Get weather forecast", inputSchema=complex_schema)]
 
         result = mcp_tools_to_openai_format(mcp_tools)
 
@@ -115,7 +81,7 @@ class TestMcpToolsToOpenaiFormat:
             Tool(
                 name="no_args_tool",
                 description="A tool with no arguments",
-                inputSchema={"type": "object", "properties": {}}
+                inputSchema={"type": "object", "properties": {}},
             )
         ]
 
@@ -248,11 +214,11 @@ class TestExtractTemplateVariables:
         assert variables == []
 
     def test_extract_with_repeated_variables(self) -> None:
-        """Test extracting repeated variables."""
+        """Test that repeated variables are deduplicated."""
         variables = extract_template_variables("users/{id}/posts/{id}")
 
-        assert variables == ["id", "id"]
-        assert len(variables) == 2
+        assert variables == ["id"]
+        assert len(variables) == 1
 
     def test_extract_with_nested_braces(self) -> None:
         """Test extraction handles only outer braces."""
@@ -279,18 +245,14 @@ class TestSubstituteTemplateVariables:
 
     def test_substitute_single_variable(self) -> None:
         """Test substituting single variable."""
-        result = substitute_template_variables(
-            "file:///{path}",
-            {"path": "documents"}
-        )
+        result = substitute_template_variables("file:///{path}", {"path": "documents"})
 
         assert result == "file:///documents"
 
     def test_substitute_multiple_variables(self) -> None:
         """Test substituting multiple variables."""
         result = substitute_template_variables(
-            "file:///{path}/to/{filename}",
-            {"path": "documents", "filename": "report.txt"}
+            "file:///{path}/to/{filename}", {"path": "documents", "filename": "report.txt"}
         )
 
         assert result == "file:///documents/to/report.txt"
@@ -298,82 +260,59 @@ class TestSubstituteTemplateVariables:
     def test_substitute_with_url_encoding(self) -> None:
         """Test that spaces are URL-encoded."""
         result = substitute_template_variables(
-            "file:///{path}/{filename}",
-            {"path": "my documents", "filename": "my report.txt"}
+            "file:///{path}/{filename}", {"path": "my documents", "filename": "my report.txt"}
         )
 
         assert result == "file:///my%20documents/my%20report.txt"
 
     def test_substitute_special_characters_encoded(self) -> None:
         """Test that special characters are URL-encoded."""
-        result = substitute_template_variables(
-            "path/{name}",
-            {"name": "test&value"}
-        )
+        result = substitute_template_variables("path/{name}", {"name": "test&value"})
 
         assert result == "path/test%26value"
 
     def test_substitute_with_no_variables(self) -> None:
         """Test substitution when template has no variables."""
-        result = substitute_template_variables(
-            "file:///static/path",
-            {}
-        )
+        result = substitute_template_variables("file:///static/path", {})
 
         assert result == "file:///static/path"
 
     def test_substitute_partial_variables(self) -> None:
         """Test substitution when only some variables are provided."""
-        result = substitute_template_variables(
-            "path/{var1}/{var2}",
-            {"var1": "value1"}
-        )
+        result = substitute_template_variables("path/{var1}/{var2}", {"var1": "value1"})
 
         assert result == "path/value1/{var2}"
         assert "{var2}" in result
 
     def test_substitute_empty_value(self) -> None:
         """Test substituting variable with empty value."""
-        result = substitute_template_variables(
-            "path/{var}/end",
-            {"var": ""}
-        )
+        result = substitute_template_variables("path/{var}/end", {"var": ""})
 
         assert result == "path//end"
 
     def test_substitute_preserves_non_variable_braces(self) -> None:
         """Test that unmatched braces are preserved."""
-        result = substitute_template_variables(
-            "path/{var}/text{not_var",
-            {"var": "value"}
-        )
+        result = substitute_template_variables("path/{var}/text{not_var", {"var": "value"})
 
         assert result == "path/value/text{not_var"
 
     def test_substitute_numeric_values(self) -> None:
         """Test substituting with numeric string values."""
-        result = substitute_template_variables(
-            "users/{id}/posts/{post_id}",
-            {"id": "123", "post_id": "456"}
-        )
+        result = substitute_template_variables("users/{id}/posts/{post_id}", {"id": "123", "post_id": "456"})
 
         assert result == "users/123/posts/456"
 
     def test_substitute_complex_path(self) -> None:
         """Test substituting in complex path with multiple variables."""
         result = substitute_template_variables(
-            "inventory://category/{category}/item/{item_id}/price",
-            {"category": "electronics", "item_id": "e-12345"}
+            "inventory://category/{category}/item/{item_id}/price", {"category": "electronics", "item_id": "e-12345"}
         )
 
         assert result == "inventory://category/electronics/item/e-12345/price"
 
     def test_substitute_unicode_characters(self) -> None:
         """Test substituting with Unicode characters."""
-        result = substitute_template_variables(
-            "path/{name}",
-            {"name": "test\u00e9"}
-        )
+        result = substitute_template_variables("path/{name}", {"name": "test\u00e9"})
 
         # Unicode characters should be URL-encoded
         assert "test" in result

@@ -25,14 +25,6 @@ mcp\_multi\_server.config module
    :show-inheritance:
    :undoc-members:
 
-mcp\_multi\_server.exceptions module
-------------------------------------
-
-.. automodule:: mcp_multi_server.exceptions
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 mcp\_multi\_server.types module
 -------------------------------
 

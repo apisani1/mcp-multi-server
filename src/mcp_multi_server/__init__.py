@@ -1,6 +1,6 @@
 """MCP Multi-Server Client Library.
 
-A Python library for managing connections to multiple Model Context Protocol (MCP) servers.
+A Python library for managing connections to multiple MCP (Model Context Protocol) servers.
 This library provides a unified interface for discovering, aggregating, and routing capabilities
 (tools, resources, prompts) across multiple MCP servers.
 
@@ -8,7 +8,7 @@ Key Features:
     - Connect to multiple MCP servers simultaneously
     - Automatic capability discovery and aggregation
     - Intelligent routing of tool calls, resource reads, and prompt retrievals
-    - Namespace-based URI routing for resources
+    - Namespace-based URI routing for resources and resource templates
     - Collision detection for tools and prompts
     - OpenAI function calling integration utilities
 
@@ -44,14 +44,6 @@ from .config import (
     MCPServersConfig,
     ServerConfig,
 )
-from .exceptions import (
-    ConfigurationError,
-    MultiServerClientError,
-    PromptNotFoundError,
-    ResourceNotFoundError,
-    ServerNotFoundError,
-    ToolNotFoundError,
-)
 from .types import ServerCapabilities
 from .utils import (
     extract_template_variables,
@@ -70,13 +62,6 @@ __all__ = [
     "MCPServersConfig",
     # Type definitions
     "ServerCapabilities",
-    # Exceptions
-    "MultiServerClientError",
-    "ConfigurationError",
-    "ServerNotFoundError",
-    "ToolNotFoundError",
-    "PromptNotFoundError",
-    "ResourceNotFoundError",
     # Utility functions
     "mcp_tools_to_openai_format",
     "format_namespace_uri",

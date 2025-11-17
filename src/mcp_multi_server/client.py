@@ -1,4 +1,4 @@
-"""Multi-server MCP client for managing connections to multiple MCP servers."""
+"""MCP client for managing connections to multiple MCP servers."""
 
 import json
 import logging
@@ -43,6 +43,10 @@ from .config import (
     ServerConfig,
 )
 from .types import ServerCapabilities
+from .utils import (
+    format_namespace_uri,
+    parse_namespace_uri,
+)
 
 
 # Configure logger for this module
@@ -60,7 +64,7 @@ class MultiServerClient:
 
     This class handles:
     - Connecting to multiple MCP servers
-    - Discovering and aggregating capabilities (tools, resources, prompts)
+    - Discovering and aggregating server capabilities (tools, resources, prompts)
     - Routing tool, prompt and resource calls to the correct server
     - Managing session lifecycles with AsyncExitStack
 
@@ -196,32 +200,6 @@ class MultiServerClient:
             await self._stack.__aexit__(exc_type, exc_val, exc_tb)
             self._stack = None
 
-    def _load_config(self) -> MCPServersConfig:
-        """Load server configuration from JSON file.
-
-        Returns:
-            Parsed configuration object.
-
-        Raises:
-            FileNotFoundError: If config file doesn't exist.
-            json.JSONDecodeError: If config file is invalid JSON.
-            pydantic.ValidationError: If config data doesn't match schema.
-
-        Note:
-            This is a private method. Use from_config() or from_dict() instead.
-        """
-        # If config was set programmatically (from_dict), return it
-        if self._config is not None:
-            return self._config
-
-        if not self.config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
-
-        with open(self.config_path, encoding="utf-8") as f:
-            config_data = json.load(f)
-
-        return MCPServersConfig.model_validate(config_data)
-
     async def connect_all(self, stack: AsyncExitStack) -> None:
         """Connect to all configured MCP servers and discover their capabilities.
 
@@ -250,6 +228,32 @@ class MultiServerClient:
 
         logger.info("Successfully connected to %d server(s)", len(self.sessions))
 
+    def _load_config(self) -> MCPServersConfig:
+        """Load server configuration from JSON file.
+
+        Returns:
+            Parsed configuration object.
+
+        Raises:
+            FileNotFoundError: If config file doesn't exist.
+            json.JSONDecodeError: If config file is invalid JSON.
+            pydantic.ValidationError: If config data doesn't match schema.
+
+        Note:
+            This is a private method. Use from_config() or from_dict() instead.
+        """
+        # If config was set programmatically (from_dict), return it
+        if self._config is not None:
+            return self._config
+
+        if not self.config_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
+
+        with open(self.config_path, encoding="utf-8") as f:
+            config_data = json.load(f)
+
+        return MCPServersConfig.model_validate(config_data)
+
     async def _connect_server(self, stack: AsyncExitStack, server_name: str, server_config: ServerConfig) -> None:
         """Connect to a single MCP server and discover its capabilities.
 
@@ -267,11 +271,10 @@ class MultiServerClient:
             pydantic.ValidationError: If server parameters are invalid.
 
         Note:
-            Failures during capability discovery (tools, resources, prompts, templates)
-            are caught and logged as warnings. The server will still be registered with
-            partial capabilities if connection and initialization succeed.
+            Failures during capability discovery are caught and logged as warnings.
+            The server will still be registered with partial capabilities if connection and initialization succeed.
         """
-        logger.info("[%s] Connecting...", server_name)
+        logger.info("[%s] connecting...", server_name)
 
         # Create server parameters
         params = StdioServerParameters(command=server_config.command, args=server_config.args)
@@ -463,7 +466,7 @@ class MultiServerClient:
                     existing_meta = resource.meta or {}
                     resource_with_meta = resource.model_copy(
                         update={
-                            "uri": f"{server_name}:{resource.uri}" if use_namespace else resource.uri,
+                            "uri": format_namespace_uri(server_name, resource.uri) if use_namespace else resource.uri,
                             "meta": {**existing_meta, "serverName": server_name},
                         }
                     )
@@ -500,6 +503,7 @@ class MultiServerClient:
             >>> for template in result.resourceTemplates:
             ...     server = template.meta.get("serverName") if template.meta else None
             ...     # URI template is already namespaced: "filesystem:file:///{path}"
+            ...     # Needs to be filled in with actual path when used
             ...     uri = template.uriTemplate.replace("{path}", "example.txt")
             ...     content = await client.read_resource(uri)
         """
@@ -515,7 +519,9 @@ class MultiServerClient:
                     template_with_meta = template.model_copy(
                         update={
                             "uriTemplate": (
-                                f"{server_name}:{template.uriTemplate}" if use_namespace else template.uriTemplate
+                                format_namespace_uri(server_name, template.uriTemplate)
+                                if use_namespace
+                                else template.uriTemplate
                             ),
                             "meta": {**existing_meta, "serverName": server_name},
                         }
@@ -627,19 +633,11 @@ class MultiServerClient:
             Raises McpError for both routing errors and protocol-level errors to align
             with MCP SDK behavior.
         """
-        # Convert AnyUrl to string for processing
-        uri_str = str(uri)
-        actual_uri = uri_str
-
         if server_name is None:
             # Try to extract server from namespaced URI
-            if ":" in uri_str:
-                potential_server, potential_uri = uri_str.split(":", 1)
-                if potential_server in self.sessions:
-                    server_name = potential_server
-                    actual_uri = potential_uri
-
-            if server_name is None:
+            server_name, uri = parse_namespace_uri(uri)
+            if server_name is None or server_name not in self.sessions:
+                # No server specified and, URI is not namespaced or server in namespace is unknown
                 raise McpError(
                     ErrorData(
                         code=-32601,
@@ -651,7 +649,7 @@ class MultiServerClient:
         if not session:
             raise McpError(ErrorData(code=-32601, message=f"Unknown server: {server_name}"))
 
-        return await session.read_resource(AnyUrl(actual_uri))
+        return await session.read_resource(AnyUrl(uri))
 
     async def get_prompt(
         self,
@@ -698,34 +696,3 @@ class MultiServerClient:
 
         session = self.sessions[server_name]
         return await session.get_prompt(name, arguments=arguments or {})
-
-    def print_capabilities_summary(self) -> None:
-        """Print a summary of all discovered capabilities."""
-        print("\n" + "=" * 80)
-        print("CAPABILITIES SUMMARY")
-        print("=" * 80)
-
-        for server_name, caps in self.capabilities.items():
-            print(f"\n[{server_name}]")
-
-            if caps.tools and caps.tools.tools:
-                print(f"  Tools ({len(caps.tools.tools)}):")
-                for tool in caps.tools.tools:
-                    print(f"    - {tool.name}: {tool.description}")
-
-            if caps.resources and caps.resources.resources:
-                print(f"  Resources ({len(caps.resources.resources)}):")
-                for resource in caps.resources.resources:
-                    print(f"    - {resource.name}: {resource.uri}")
-
-            if caps.resource_templates and caps.resource_templates.resourceTemplates:
-                print(f"  Resource Templates ({len(caps.resource_templates.resourceTemplates)}):")
-                for template in caps.resource_templates.resourceTemplates:
-                    print(f"    - {template.name}: {template.uriTemplate}")
-
-            if caps.prompts and caps.prompts.prompts:
-                print(f"  Prompts ({len(caps.prompts.prompts)}):")
-                for prompt in caps.prompts.prompts:
-                    print(f"    - {prompt.name}: {prompt.description}")
-
-        print("\n" + "=" * 80 + "\n")

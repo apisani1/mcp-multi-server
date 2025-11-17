@@ -29,7 +29,7 @@ Automatically discover and aggregate all capabilities (tools, resources, prompts
 
 ### Developer Experience
 - Simple programmatic or file-based configuration
-- Comprehensive error handling with custom exceptions
+- Comprehensive error handling
 - Full async/await support
 - Rich logging for debugging
 - 83% test coverage

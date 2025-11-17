@@ -2,20 +2,21 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import (
+    Any,
+    Dict,
+)
+from unittest.mock import (
+    AsyncMock,
+    MagicMock,
+    patch,
+)
 
 import pytest
 
 from mcp_multi_server import MultiServerClient
 from mcp_multi_server.config import MCPServersConfig
-from mcp_multi_server.exceptions import (
-    ConfigurationError,
-    PromptNotFoundError,
-    ResourceNotFoundError,
-    ServerNotFoundError,
-    ToolNotFoundError,
-)
+from mcp_multi_server.utils import print_capabilities_summary
 
 
 # ============================================================================
@@ -205,9 +206,7 @@ class TestConnectionManagement:
 
     @pytest.mark.asyncio
     async def test_connect_to_server_success(
-        self,
-        sample_config_dict: Dict[str, Any],
-        mock_tool_server: MagicMock
+        self, sample_config_dict: Dict[str, Any], mock_tool_server: MagicMock
     ) -> None:
         """Test successful connection to a server."""
         client = MultiServerClient.from_dict(sample_config_dict)
@@ -259,21 +258,19 @@ class TestCapabilityAggregation:
         sample_tools: list,
     ) -> None:
         """Test list_tools aggregates tools from all servers."""
-        from mcp_multi_server.types import ServerCapabilities
         from mcp.types import ListToolsResult
+        from mcp_multi_server.types import ServerCapabilities
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
         # Populate capabilities (not sessions)
         client.capabilities = {
             "tool_server": ServerCapabilities(
-                name="tool_server",
-                tools=ListToolsResult(tools=sample_tools, nextCursor=None)
+                name="tool_server", tools=ListToolsResult(tools=sample_tools, nextCursor=None)
             ),
             "resource_server": ServerCapabilities(
-                name="resource_server",
-                tools=ListToolsResult(tools=[], nextCursor=None)
-            )
+                name="resource_server", tools=ListToolsResult(tools=[], nextCursor=None)
+            ),
         }
 
         result = client.list_tools()
@@ -291,21 +288,19 @@ class TestCapabilityAggregation:
         sample_resources: list,
     ) -> None:
         """Test list_resources aggregates resources from all servers."""
-        from mcp_multi_server.types import ServerCapabilities
         from mcp.types import ListResourcesResult
+        from mcp_multi_server.types import ServerCapabilities
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
         # Populate capabilities
         client.capabilities = {
             "resource_server": ServerCapabilities(
-                name="resource_server",
-                resources=ListResourcesResult(resources=sample_resources, nextCursor=None)
+                name="resource_server", resources=ListResourcesResult(resources=sample_resources, nextCursor=None)
             ),
             "tool_server": ServerCapabilities(
-                name="tool_server",
-                resources=ListResourcesResult(resources=[], nextCursor=None)
-            )
+                name="tool_server", resources=ListResourcesResult(resources=[], nextCursor=None)
+            ),
         }
 
         result = client.list_resources()
@@ -322,21 +317,19 @@ class TestCapabilityAggregation:
         sample_prompts: list,
     ) -> None:
         """Test list_prompts aggregates prompts from all servers."""
-        from mcp_multi_server.types import ServerCapabilities
         from mcp.types import ListPromptsResult
+        from mcp_multi_server.types import ServerCapabilities
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
         # Populate capabilities
         client.capabilities = {
             "prompt_server": ServerCapabilities(
-                name="prompt_server",
-                prompts=ListPromptsResult(prompts=sample_prompts, nextCursor=None)
+                name="prompt_server", prompts=ListPromptsResult(prompts=sample_prompts, nextCursor=None)
             ),
             "tool_server": ServerCapabilities(
-                name="tool_server",
-                prompts=ListPromptsResult(prompts=[], nextCursor=None)
-            )
+                name="tool_server", prompts=ListPromptsResult(prompts=[], nextCursor=None)
+            ),
         }
 
         result = client.list_prompts()
@@ -375,17 +368,11 @@ class TestToolRouting:
         assert result.isError is False
         assert "San Francisco" in result.content[0].text
         mock_tool_server.call_tool.assert_called_once_with(
-            "get_weather",
-            {"location": "San Francisco"},
-            read_timeout_seconds=None,
-            progress_callback=None
+            "get_weather", {"location": "San Francisco"}, read_timeout_seconds=None, progress_callback=None
         )
 
     @pytest.mark.asyncio
-    async def test_call_tool_with_unknown_tool_returns_error(
-        self,
-        sample_config_dict: Dict[str, Any]
-    ) -> None:
+    async def test_call_tool_with_unknown_tool_returns_error(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test call_tool with unknown tool returns error result."""
         client = MultiServerClient.from_dict(sample_config_dict)
         client.tool_to_server = {}
@@ -398,8 +385,7 @@ class TestToolRouting:
 
     @pytest.mark.asyncio
     async def test_call_tool_with_explicit_unknown_server_returns_error(
-        self,
-        sample_config_dict: Dict[str, Any]
+        self, sample_config_dict: Dict[str, Any]
     ) -> None:
         """Test call_tool with explicit unknown server name returns error result."""
         client = MultiServerClient.from_dict(sample_config_dict)
@@ -431,16 +417,13 @@ class TestResourceRouting:
 
         assert len(result.contents) > 0
         # For TextResourceContents, the content is in the text field
-        assert hasattr(result.contents[0], 'text')
+        assert hasattr(result.contents[0], "text")
         assert "Inventory Overview" in result.contents[0].text
         # The mock server is called with AnyUrl type
         mock_resource_server.read_resource.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_read_resource_without_namespace_raises_mcperror(
-        self,
-        sample_config_dict: Dict[str, Any]
-    ) -> None:
+    async def test_read_resource_without_namespace_raises_mcperror(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test read_resource without namespace raises McpError."""
         from mcp.shared.exceptions import McpError
 
@@ -450,10 +433,7 @@ class TestResourceRouting:
             await client.read_resource("inventory://overview")
 
     @pytest.mark.asyncio
-    async def test_read_resource_with_unknown_server_raises_mcperror(
-        self,
-        sample_config_dict: Dict[str, Any]
-    ) -> None:
+    async def test_read_resource_with_unknown_server_raises_mcperror(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test read_resource with unknown server raises McpError."""
         from mcp.shared.exceptions import McpError
 
@@ -490,10 +470,7 @@ class TestPromptRouting:
         assert call_args[1]["arguments"] == {"topic": "AI", "length": "short"}  # keyword arg
 
     @pytest.mark.asyncio
-    async def test_get_prompt_with_unknown_prompt_raises_mcperror(
-        self,
-        sample_config_dict: Dict[str, Any]
-    ) -> None:
+    async def test_get_prompt_with_unknown_prompt_raises_mcperror(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test get_prompt with unknown prompt raises McpError."""
         from mcp.shared.exceptions import McpError
 
@@ -505,8 +482,7 @@ class TestPromptRouting:
 
     @pytest.mark.asyncio
     async def test_get_prompt_with_explicit_unknown_server_raises_mcperror(
-        self,
-        sample_config_dict: Dict[str, Any]
+        self, sample_config_dict: Dict[str, Any]
     ) -> None:
         """Test get_prompt with explicit unknown server raises McpError."""
         from mcp.shared.exceptions import McpError
@@ -572,10 +548,7 @@ class TestErrorHandling:
     """Tests for error handling scenarios."""
 
     @pytest.mark.asyncio
-    async def test_call_tool_handles_server_error(
-        self,
-        sample_config_dict: Dict[str, Any]
-    ) -> None:
+    async def test_call_tool_handles_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test call_tool handles server errors gracefully."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -589,10 +562,7 @@ class TestErrorHandling:
             await client.call_tool("test_tool", {})
 
     @pytest.mark.asyncio
-    async def test_read_resource_handles_server_error(
-        self,
-        sample_config_dict: Dict[str, Any]
-    ) -> None:
+    async def test_read_resource_handles_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test read_resource handles server errors gracefully."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -605,10 +575,7 @@ class TestErrorHandling:
             await client.read_resource("test_server:invalid://uri")
 
     @pytest.mark.asyncio
-    async def test_get_prompt_handles_server_error(
-        self,
-        sample_config_dict: Dict[str, Any]
-    ) -> None:
+    async def test_get_prompt_handles_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test get_prompt handles server errors gracefully."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -631,32 +598,33 @@ class TestPrintCapabilitiesSummary:
         sample_tools: list,
         sample_resources: list,
         sample_prompts: list,
-        capsys: pytest.CaptureFixture
+        capsys: pytest.CaptureFixture,
     ) -> None:
         """Test printing capabilities summary with all capability types."""
+        from mcp.types import (
+            ListPromptsResult,
+            ListResourcesResult,
+            ListToolsResult,
+        )
         from mcp_multi_server.types import ServerCapabilities
-        from mcp.types import ListToolsResult, ListResourcesResult, ListPromptsResult
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
         # Populate capabilities directly (not via list_* methods)
         client.capabilities = {
             "tool_server": ServerCapabilities(
-                name="tool_server",
-                tools=ListToolsResult(tools=sample_tools, nextCursor=None)
+                name="tool_server", tools=ListToolsResult(tools=sample_tools, nextCursor=None)
             ),
             "resource_server": ServerCapabilities(
-                name="resource_server",
-                resources=ListResourcesResult(resources=sample_resources, nextCursor=None)
+                name="resource_server", resources=ListResourcesResult(resources=sample_resources, nextCursor=None)
             ),
             "prompt_server": ServerCapabilities(
-                name="prompt_server",
-                prompts=ListPromptsResult(prompts=sample_prompts, nextCursor=None)
-            )
+                name="prompt_server", prompts=ListPromptsResult(prompts=sample_prompts, nextCursor=None)
+            ),
         }
 
         # Print summary
-        client.print_capabilities_summary()
+        print_capabilities_summary(client)
 
         captured = capsys.readouterr()
         assert "tool_server" in captured.out
@@ -667,15 +635,13 @@ class TestPrintCapabilitiesSummary:
         assert "write_report" in captured.out  # Prompt name
 
     def test_print_capabilities_summary_with_empty_capabilities(
-        self,
-        sample_config_dict: Dict[str, Any],
-        capsys: pytest.CaptureFixture
+        self, sample_config_dict: Dict[str, Any], capsys: pytest.CaptureFixture
     ) -> None:
         """Test printing capabilities summary with no capabilities."""
         client = MultiServerClient.from_dict(sample_config_dict)
         client.capabilities = {}
 
-        client.print_capabilities_summary()
+        print_capabilities_summary(client)
 
         captured = capsys.readouterr()
         # Should still produce header even with no capabilities

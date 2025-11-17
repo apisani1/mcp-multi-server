@@ -8,16 +8,13 @@ and use prompts from multiple MCP servers.
 import asyncio
 import json
 import os
-import re
 import traceback
-from contextlib import AsyncExitStack
 from typing import (
     Any,
     Dict,
     List,
     Union,
 )
-from urllib.parse import quote
 
 from dotenv import (
     find_dotenv,
@@ -25,9 +22,9 @@ from dotenv import (
 )
 from examples.support.media_handler import (
     decode_binary_file,
-    play_audio_content,
     display_content_from_uri,
     display_image_content,
+    play_audio_content,
 )
 from mcp.types import (
     AudioContent,
@@ -40,9 +37,14 @@ from mcp.types import (
     ResourceLink,
     ResourceTemplate,
     TextContent,
-    Tool,
 )
 from mcp_multi_server import MultiServerClient
+from mcp_multi_server.utils import (
+    extract_template_variables,
+    mcp_tools_to_openai_format,
+    print_capabilities_summary,
+    substitute_template_variables,
+)
 from openai import OpenAI
 
 
@@ -276,16 +278,9 @@ async def search_and_instantiate_resource(
     return ""
 
 
-def extract_template_variables(uri_template: str) -> list[str]:
-    """Extract variable names from a URI template."""
-    pattern = r"\{([^}]+)\}"
-    return re.findall(pattern, uri_template)
-
-
 def get_template_variables_from_user(uri_template: str) -> dict[str, str]:
     """Extract variables from URI template and ask user for values."""
-    pattern = r"\{([^}]+)\}"
-    variables = re.findall(pattern, uri_template)
+    variables = extract_template_variables(uri_template)
 
     if not variables:
         return {}
@@ -301,19 +296,6 @@ def get_template_variables_from_user(uri_template: str) -> dict[str, str]:
     return values
 
 
-def substitute_template_variables(uri_template: str, variables: dict[str, str]) -> str:
-    """Substitute variables in URI template with provided values.
-
-    URL-encodes the values to handle spaces and special characters properly.
-    """
-    result = uri_template
-    for var, value in variables.items():
-        # URL encode the value to handle spaces and special characters
-        encoded_value = quote(value, safe="")
-        result = result.replace(f"{{{var}}}", encoded_value)
-    return result
-
-
 async def chat(config_path: str = "examples/mcp_servers.json") -> None:
     """Run the multi-server chat interface.
 
@@ -324,35 +306,19 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
     assert os.getenv("OPENAI_API_KEY"), "Error: OPENAI_API_KEY not found in environment"
 
     try:
-        async with AsyncExitStack() as stack:
-            # Initialize multi-server client
-            client = MultiServerClient(config_path)
-            await client.connect_all(stack)
+        async with MultiServerClient.from_config(config_path) as client:
 
             # Print capabilities summary
-            client.print_capabilities_summary()
+            print_capabilities_summary(client)
 
             # Fetch all prompts and resources from all servers
             all_prompts = client.list_prompts().prompts
             all_resources = client.list_resources().resources
             all_resource_templates = client.list_resource_templates().resourceTemplates
 
-            # Get all tools for OpenAI using the new list_tools() method
-            tools_result = client.list_tools()
-            all_tools: List[Tool] = tools_result.tools or []
-
-            # Convert MCP tools to OpenAI format
-            openai_tools = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.inputSchema,
-                    },
-                }
-                for tool in all_tools
-            ]
+            # Get all tools from all servers and convert to OpenAI format
+            tools_result = client.list_tools().tools or []
+            openai_tools = mcp_tools_to_openai_format(tools_result)
 
             # Initialize OpenAI client
             openai_client = OpenAI()

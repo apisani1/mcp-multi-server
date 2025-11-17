@@ -2,13 +2,54 @@
 
 import re
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     List,
+    Union,
 )
 from urllib.parse import quote
 
+from pydantic import AnyUrl
+
 from mcp.types import Tool
+
+
+if TYPE_CHECKING:
+    from mcp_multi_server.client import MultiServerClient
+
+
+def print_capabilities_summary(client: "MultiServerClient") -> None:
+    """Utility function to print a summary of all discovered capabilities in a MultiServerClient object."""
+
+    print("\n" + "=" * 80)
+    print("CAPABILITIES SUMMARY")
+    print("=" * 80)
+
+    for server_name, caps in client.capabilities.items():
+        print(f"\n[{server_name}]")
+
+        if caps.tools and caps.tools.tools:
+            print(f"  Tools ({len(caps.tools.tools)}):")
+            for tool in caps.tools.tools:
+                print(f"    - {tool.name}: {tool.description}")
+
+        if caps.resources and caps.resources.resources:
+            print(f"  Resources ({len(caps.resources.resources)}):")
+            for resource in caps.resources.resources:
+                print(f"    - {resource.name}: {resource.uri}")
+
+        if caps.resource_templates and caps.resource_templates.resourceTemplates:
+            print(f"  Resource Templates ({len(caps.resource_templates.resourceTemplates)}):")
+            for template in caps.resource_templates.resourceTemplates:
+                print(f"    - {template.name}: {template.uriTemplate}")
+
+        if caps.prompts and caps.prompts.prompts:
+            print(f"  Prompts ({len(caps.prompts.prompts)}):")
+            for prompt in caps.prompts.prompts:
+                print(f"    - {prompt.name}: {prompt.description}")
+
+    print("\n" + "=" * 80 + "\n")
 
 
 def mcp_tools_to_openai_format(tools: List[Tool]) -> List[Dict[str, Any]]:
@@ -26,22 +67,29 @@ def mcp_tools_to_openai_format(tools: List[Tool]) -> List[Dict[str, Any]]:
         - type: Always "function"
         - function: Dict containing name, description, and parameters (JSON schema)
 
-    Examples:
-        >>> from mcp.types import Tool
-        >>> mcp_tools = [
-        ...     Tool(
-        ...         name="get_weather",
-        ...         description="Get weather for a location",
-        ...         inputSchema={"type": "object", "properties": {"location": {"type": "string"}}}
-        ...     )
-        ... ]
-        >>> openai_tools = mcp_tools_to_openai_format(mcp_tools)
-        >>> openai_tools[0]["function"]["name"]
-        'get_weather'
+    Example:
+        >>> from mcp_multi_server import MultiServerClient
+        >>> from mcp_multi_server.utils import mcp_tools_to_openai_format
+        >>> from openai import OpenAI
+        >>>
+        >>> async with MultiServerClient.from_config("mcp_servers.json") as client:
+        >>>     tools_result = client.list_tools().tools or []
+        >>>     openai_tools = mcp_tools_to_openai_format(tools_result)
+        >>>     openai_client = OpenAI()
+        >>>     messages = [
+        ...         {"role": "user", "content": "Find the weather in New York City."}
+        ...     ]
+        >>>     response = openai_client.chat.completions.create(
+        ...                    model="gpt-4-0613",
+        ...                    messages=messages,
+        ...                    tools=openai_tools if openai_tools else None,
+        ...                    tool_choice="auto" if openai_tools else None,
+        ...                ).choices[0]
+
 
     Note:
-        The inputSchema from MCP tools is used directly as the parameters
-        field in OpenAI format, as both follow JSON Schema specifications.
+        The inputSchema from MCP tools is used directly as the parameters field in OpenAI format,
+        as both follow JSON Schema specifications.
     """
     return [
         {
@@ -56,7 +104,7 @@ def mcp_tools_to_openai_format(tools: List[Tool]) -> List[Dict[str, Any]]:
     ]
 
 
-def format_namespace_uri(server_name: str, uri: str) -> str:
+def format_namespace_uri(server_name: str, uri: Union[str, AnyUrl]) -> str:
     """Format a URI with a server namespace prefix.
 
     Args:
@@ -79,7 +127,7 @@ def format_namespace_uri(server_name: str, uri: str) -> str:
     return f"{server_name}:{uri}"
 
 
-def parse_namespace_uri(namespaced_uri: str) -> tuple[str | None, str]:
+def parse_namespace_uri(uri: Union[str, AnyUrl]) -> tuple[str | None, str]:
     """Parse a namespaced URI to extract server name and original URI.
 
     Args:
@@ -101,6 +149,7 @@ def parse_namespace_uri(namespaced_uri: str) -> tuple[str | None, str]:
         This function looks for the first colon to determine if a namespace exists.
         It does not validate that the extracted server name actually exists.
     """
+    namespaced_uri = str(uri)
     if ":" in namespaced_uri:
         parts = namespaced_uri.split(":", 1)
         if len(parts) == 2:
@@ -108,30 +157,34 @@ def parse_namespace_uri(namespaced_uri: str) -> tuple[str | None, str]:
     return None, namespaced_uri
 
 
-def extract_template_variables(uri_template: str) -> List[str]:
+def extract_template_variables(uri_template: Union[str, AnyUrl]) -> List[str]:
     """Extract variable names from a URI template.
 
     URI templates use curly braces to denote variables that should be substituted.
+    Duplicate variables are automatically deduplicated while preserving order.
 
     Args:
         uri_template: URI template string with variables in {variable} format.
 
     Returns:
-        List of variable names found in the template (without braces).
+        List of unique variable names found in the template (without braces),
+        in order of first appearance.
 
     Examples:
         >>> extract_template_variables("file:///{path}/to/{filename}")
         ['path', 'filename']
         >>> extract_template_variables("users/{id}/posts/{post_id}")
         ['id', 'post_id']
+        >>> extract_template_variables("users/{id}/posts/{id}")
+        ['id']
         >>> extract_template_variables("no/variables/here")
         []
     """
     pattern = r"\{([^}]+)\}"
-    return re.findall(pattern, uri_template)
+    return list(dict.fromkeys(re.findall(pattern, str(uri_template))))
 
 
-def substitute_template_variables(uri_template: str, variables: Dict[str, str]) -> str:
+def substitute_template_variables(uri_template: Union[str, AnyUrl], variables: Dict[str, str]) -> str:
     """Substitute variables in URI template with provided values.
 
     Variable values are URL-encoded to handle spaces and special characters properly.
@@ -156,10 +209,9 @@ def substitute_template_variables(uri_template: str, variables: Dict[str, str]) 
         'users/123'
 
     Note:
-        Values are URL-encoded using urllib.parse.quote with safe="" to ensure
-        proper handling of special characters in URIs.
+        Values are URL-encoded to ensure proper handling of special characters in URIs.
     """
-    result = uri_template
+    result = str(uri_template)
     for var, value in variables.items():
         # URL encode the value to handle spaces and special characters
         encoded_value = quote(value, safe="")
