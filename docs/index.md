@@ -1,6 +1,6 @@
 # MCP Multi-Server Documentation
 
-A Python library for managing connections to multiple [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers with unified capability discovery, intelligent routing, and seamless OpenAI integration.
+A Python library for managing connections to multiple [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers with unified capability discovery and intelligent routing.
 
 ## Overview
 
@@ -11,7 +11,6 @@ MCP Multi-Server simplifies the complexity of working with multiple MCP servers 
 - **Intelligent Routing**: Automatically route tool calls, resource reads, and prompt retrievals to the correct server
 - **Collision Detection**: Detect and warn about duplicate tool or prompt names across servers
 - **Namespace Support**: Use namespaced URIs (server:uri) for unambiguous resource routing
-- **OpenAI Integration**: Built-in utilities for converting MCP tools to OpenAI function calling format
 - **Type Safety**: Full type hints and Pydantic validation for configuration and data models
 
 ## Key Features
@@ -32,7 +31,6 @@ Automatically discover and aggregate all capabilities (tools, resources, prompts
 - Comprehensive error handling
 - Full async/await support
 - Rich logging for debugging
-- 83% test coverage
 
 ## Quick Start
 
@@ -162,7 +160,6 @@ Examples <https://github.com/apisani1/mcp-multi-server/tree/main/examples>
 
 - **AI Agents**: Build agents that can interact with multiple data sources and tools
 - **Multi-Domain Applications**: Access capabilities from different domains (filesystem, database, APIs)
-- **OpenAI Function Calling**: Convert MCP tools to OpenAI format for seamless integration
 - **Microservices**: Aggregate capabilities from multiple microservices
 - **Development Tools**: Create unified interfaces for development tooling
 
