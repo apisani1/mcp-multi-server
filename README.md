@@ -12,7 +12,6 @@ A Python library for managing connections to multiple [Model Context Protocol (M
 - **Intelligent Routing**: Automatically route tool calls, resource reads, and prompt retrievals to the correct server
 - **Namespace Support**: Use namespaced URIs for unambiguous resource routing
 - **Collision Detection**: Detect and warn about duplicate tool or prompt names across servers
-- **OpenAI Integration**: Built-in utilities for converting MCP tools to OpenAI function calling format
 - **Async Context Manager**: Clean resource management with Python's async context managers
 
 ## Installation
@@ -110,47 +109,13 @@ async with MultiServerClient.from_dict(config.model_dump()) as client:
     # ...
 ```
 
-## OpenAI Integration
-
-The library includes utilities for converting MCP tools to OpenAI function calling format:
-
-```python
-from mcp_multi_server import MultiServerClient, mcp_tools_to_openai_format
-from openai import OpenAI
-import json
-
-async def chat_with_tools():
-    async with MultiServerClient.from_config("mcp_servers.json") as mcp_client:
-        # Get all tools from all servers
-        tools_result = mcp_client.list_tools()
-
-        # Convert to OpenAI format
-        openai_tools = mcp_tools_to_openai_format(tools_result.tools)
-
-        # Use with OpenAI
-        openai_client = OpenAI()
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": "List all files in /home"}],
-            tools=openai_tools
-        )
-
-        # If OpenAI wants to call a tool, route it through MCP client
-        if response.choices[0].message.tool_calls:
-            tool_call = response.choices[0].message.tool_calls[0]
-            result = await mcp_client.call_tool(
-                tool_call.function.name,
-                json.loads(tool_call.function.arguments)
-            )
-```
-
 ## Examples
 
 The repository includes comprehensive examples demonstrating various use cases. See the [examples directory](examples/) for:
 
 - Example MCP server implementations (tools, resources, prompts)
-- Example clients showing different usage patterns
-- Full chat client with OpenAI integration
+- Example chat client showing usage patterns
+- Full client with OpenAI integration
 
 ## API Reference
 
@@ -171,10 +136,10 @@ Main class for managing multiple MCP servers.
 - `call_tool(name, arguments, server_name=None)` - Call a tool
 - `read_resource(uri, server_name=None)` - Read a resource
 - `get_prompt(name, arguments=None, server_name=None)` - Get a prompt
-- `print_capabilities_summary()` - Print discovered capabilities
 
 ### Utility Functions
 
+- `print_capabilities_summary(client)` - Print client discovered capabilities
 - `mcp_tools_to_openai_format(tools)` - Convert MCP tools to OpenAI function format
 - `format_namespace_uri(server_name, uri)` - Create namespaced URI
 - `parse_namespace_uri(uri)` - Parse namespaced URI
