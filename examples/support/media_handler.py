@@ -21,6 +21,10 @@ from PIL.Image import (
 
 
 def get_image(image_path: str) -> tuple[str, str]:
+    """
+    Load an image from the given path, resize it to a maximum of 1024x1024 pixels,
+    convert it to PNG format, and return its base64-encoded data along with the MIME type.
+    """
     img: Image = PilImage.open(image_path)
     img.thumbnail((1024, 1024))  # Resize to max 1024x1024
 
@@ -28,7 +32,7 @@ def get_image(image_path: str) -> tuple[str, str]:
     if img.mode != "RGB":
         img = img.convert("RGB")
 
-    # Save as PNG to a bytes buffer instead of using tobytes()
+    # Save as PNG to a bytes buffer in memory
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
@@ -37,6 +41,9 @@ def get_image(image_path: str) -> tuple[str, str]:
 
 
 def get_audio(audio_path: str) -> tuple[str, str]:
+    """ "
+    Load an audio file from the given path and return its base64-encoded data along with the MIME type.
+    """
     import os
 
     with open(audio_path, "rb") as audio_file:
@@ -62,6 +69,7 @@ def get_audio(audio_path: str) -> tuple[str, str]:
 
 def open_file_with_system_default(file_path: str) -> None:
     """Open a file with the system's default application."""
+    import os
     import platform
     import subprocess
 
@@ -69,8 +77,6 @@ def open_file_with_system_default(file_path: str) -> None:
     if system == "Darwin":  # macOS
         subprocess.run(["open", file_path], check=True)
     elif system == "Windows":
-        import os
-
         os.startfile(file_path)  # type: ignore # pylint: disable=no-member
     elif system == "Linux":
         subprocess.run(["xdg-open", file_path], check=True)
@@ -84,7 +90,7 @@ def display_image_content(image_content: ImageContent) -> None:
         # Decode base64 image data
         image_bytes = base64.b64decode(image_content.data)
 
-        # The server now sends proper PNG data, so this should work directly
+        # Assumes that the server sends PNG data
         image: Image = PilImage.open(io.BytesIO(image_bytes))
 
         # Scale up the image so it's visible
