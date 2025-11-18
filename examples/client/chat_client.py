@@ -1,8 +1,8 @@
 """Multi-server chat client with OpenAI integration.
 
 This example demonstrates how to use the mcp-multi-server library with OpenAI
-to create an intelligent chat interface that can call tools, access resources,
-and use prompts from multiple MCP servers.
+to create a chat interface that can call tools, access resources, and use prompts
+from multiple MCP servers.
 """
 
 import asyncio
@@ -81,7 +81,9 @@ def handle_content_block(
         print(f"[Result] Resource link: {content_block.uri}")
         display_content_from_uri(content_block)
     else:
-        print(f"[Result] {str(content_block)}\n")
+        # Unknown content type
+        content_block_text = str(content_block)
+        print(f"[Result] {content_block_text[:min(80, len(content_block_text))]}\n")
 
 
 def convert_mcp_content_to_tool_response(
@@ -116,7 +118,8 @@ def convert_mcp_content_to_tool_response(
         return {"type": "text", "text": f"[Resource link: {content_block.uri}]"}
 
     # Unknown content type
-    return {"type": "text", "text": str(content_block)}
+    content_block_text = str(content_block)
+    return {"type": "text", "text": content_block_text[: min(80, len(content_block_text))]}
 
 
 def convert_mcp_content_to_message(
@@ -156,13 +159,15 @@ def convert_mcp_content_to_message(
         if hasattr(content_block.resource, "text"):
             return content_block.resource.text
         # TODO: Handle other embedded resource types appropriately
-        return f"[Embedded resource: {content_block.resource}]"
+        content_block_text = str(content_block.resource)
+        return f"[Embedded resource: {content_block_text[:min(80, len(content_block_text))]}]"
 
     if isinstance(content_block, ResourceLink):
         return f"[Resource link: {content_block.uri}]"
 
     # Unknown content type
-    return str(content_block)
+    content_block_text = str(content_block)
+    return content_block_text[:min(80, len(content_block_text))]
 
 
 def process_tool_result_content(tool_result: CallToolResult) -> str:
@@ -172,12 +177,12 @@ def process_tool_result_content(tool_result: CallToolResult) -> str:
         tool_result: CallToolResult from MCP server.
 
     Returns:
-        String content for OpenAI tool response (images converted to text descriptions).
+        String content for OpenAI tool response (images and audio converted to text descriptions).
     """
     text_parts = []
 
     for content_block in tool_result.content:
-        # Display to user (shows images locally)
+        # Display to user (shows images and play audio locally)
         handle_content_block(content_block)
         # Convert to OpenAI tool format (always returns dict with 'text' key)
         converted = convert_mcp_content_to_tool_response(content_block)
@@ -194,7 +199,7 @@ async def search_and_instantiate_prompt(
 
     Args:
         client: MultiServerClient instance.
-        prompts: List of prompt dictionaries.
+        prompts: List of prompts available from all MCP servers connected to the client.
         name: Name of the prompt to retrieve.
 
     Returns:
@@ -225,11 +230,10 @@ async def search_and_instantiate_prompt(
 
 def get_prompt_arguments(prompt: Prompt) -> dict[str, str]:
     """Ask user for prompt arguments interactively."""
-    arguments: dict[str, str] = {}
-
     if not prompt.arguments:
-        return arguments
+        return {}
 
+    arguments: dict[str, str] = {}
     print(f"\nEntering arguments for prompt '{prompt.name}':")
     print(f"Description: {prompt.description}")
     print("(Leave empty for optional arguments)\n")
@@ -251,7 +255,7 @@ async def search_and_instantiate_resource(
 
     Args:
         client: MultiServerClient instance.
-        resources: List of resource dictionaries.
+        resources: List of resources available from all MCP servers connected to the client.
         name: Name of the resource to retrieve.
 
     Returns:
@@ -316,7 +320,7 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
             all_resources = client.list_resources().resources
             all_resource_templates = client.list_resource_templates().resourceTemplates
 
-            # Get all tools from all servers and convert to OpenAI format
+            # Get tools from all servers and convert them to OpenAI format
             tools_result = client.list_tools().tools or []
             openai_tools = mcp_tools_to_openai_format(tools_result)
 
@@ -347,32 +351,26 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
 
                 if query.startswith("+resource:"):
                     resource_name = query[len("+resource:") :].strip()
-                    # List variance: List[Resource] not compatible with List[Union[Resource, ResourceTemplate]]
                     resource = await search_and_instantiate_resource(
                         client, all_resources, resource_name  # type: ignore[arg-type]
                     )
                     if not resource:
                         print(f"Resource '{resource_name}' not found.")
                     else:
-
                         print(f"****Retrieved resource content:\n{resource}\n")
-
                         messages.append({"role": "user", "content": resource})
                     query = input("> ")
                     continue
 
                 if query.startswith("+template:"):
                     template_name = query[len("+template:") :].strip()
-                    # List variance: List[ResourceTemplate] not compatible with List[Union[...]]
                     resource = await search_and_instantiate_resource(
                         client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
                     )
                     if not resource:
                         print(f"Resource Template '{template_name}' not found.")
                     else:
-
                         print(f"****Instantiated template content:\n{resource}\n")
-
                         messages.append({"role": "user", "content": resource})
                     query = input("> ")
                     continue

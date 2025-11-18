@@ -215,18 +215,9 @@ help-release:
 # EXECUTION
 ######################
 
-# Run example clients
+# Run example client
 run-chat:
-	@poetry run python3 -m examples.clients.chat_client
-
-run-tool-client:
-	@poetry run python3 -m examples.clients.tool_client
-
-run-resource-client:
-	@poetry run python3 -m examples.clients.resource_client
-
-run-prompt-client:
-	@poetry run python3 -m examples.clients.prompt_client
+	@poetry run python3 -m examples.client.chat_client
 
 # Run example servers (for testing)
 run-tool-server:
@@ -240,13 +231,13 @@ run-prompt-server:
 
 # Generic run command - runs any Python module
 # Usage: make run <module.path>
-# Example: make run examples.clients.chat_client
+# Example: make run examples.client.chat_client
 run:
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
 		echo "Usage: make run <module.path>"; \
 		echo ""; \
 		echo "Examples:"; \
-		echo "  make run examples.clients.chat_client"; \
+		echo "  make run examples.client.chat_client"; \
 		echo "  make run examples.servers.tool_server"; \
 		echo "  make run mcp_multi_server.client"; \
 		echo ""; \
@@ -318,13 +309,10 @@ help:
 	@echo ''
 	@echo 'Execution:'
 	@echo '  make run <module.path>    - Run any Python module'
-	@echo '                              Example: make run examples.clients.chat_client'
+	@echo '                              Example: make run examples.client.chat_client'
 	@echo ''
 	@echo '  Convenience targets:'
 	@echo '  make run-chat             - Run MCP multi-server chat client (with OpenAI)'
-	@echo '  make run-tool-client      - Run tool client example'
-	@echo '  make run-resource-client  - Run resource client example'
-	@echo '  make run-prompt-client    - Run prompt client example'
 	@echo '  make run-tool-server      - Run tool server (for testing)'
 	@echo '  make run-resource-server  - Run resource server (for testing)'
 	@echo '  make run-prompt-server    - Run prompt server (for testing)'

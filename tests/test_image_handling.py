@@ -4,13 +4,14 @@ import asyncio
 from contextlib import AsyncExitStack
 
 import pytest
+
 from dotenv import (
     find_dotenv,
     load_dotenv,
 )
 
 # Import the content conversion functions
-from examples.clients.chat_client import (
+from examples.client.chat_client import (
     convert_mcp_content_to_message,
     convert_mcp_content_to_tool_response,
     process_tool_result_content,
@@ -22,7 +23,7 @@ load_dotenv(find_dotenv())
 
 
 @pytest.mark.asyncio
-async def test_image_tool():
+async def test_image_tool() -> None:
     """Test the get_image tool with our new image handling functions."""
     async with AsyncExitStack() as stack:
         # Initialize multi-server client
@@ -43,7 +44,7 @@ async def test_image_tool():
         print("\n3. Processing content blocks...")
         result_content = process_tool_result_content(tool_result)
 
-        print(f"\n4. Tool response content (string):")
+        print("\n4. Tool response content (string):")
         print(f"   {result_content}")
 
         # Test individual content block conversion
@@ -55,13 +56,13 @@ async def test_image_tool():
 
         print("\n   For user/assistant messages (images as image_url):")
         for block in tool_result.content:
-            converted = convert_mcp_content_to_message(block)
+            converted_msg = convert_mcp_content_to_message(block)
             # For images, this returns an array; for text it returns a string
-            if isinstance(converted, list):
-                print(f"   Type: {type(block).__name__} -> OpenAI format: array with {len(converted)} item(s)")
-                print(f"      First item type: {converted[0]['type']}")
+            if isinstance(converted_msg, list):
+                print(f"   Type: {type(block).__name__} -> OpenAI format: array with {len(converted_msg)} item(s)")
+                print(f"      First item type: {converted_msg[0]['type']}")
             else:
-                print(f"   Type: {type(block).__name__} -> OpenAI format: string (length: {len(converted)})")
+                print(f"   Type: {type(block).__name__} -> OpenAI format: string (length: {len(converted_msg)})")
 
         print("\n" + "=" * 80)
         print("Test completed successfully!")

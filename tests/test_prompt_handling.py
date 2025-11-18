@@ -9,12 +9,12 @@ import asyncio
 from contextlib import AsyncExitStack
 
 import pytest
+
 from dotenv import (
     find_dotenv,
     load_dotenv,
 )
-
-from examples.clients.chat_client import search_and_instantiate_prompt
+from examples.client.chat_client import search_and_instantiate_prompt
 from mcp_multi_server import MultiServerClient
 
 
@@ -22,7 +22,7 @@ load_dotenv(find_dotenv())
 
 
 @pytest.mark.asyncio
-async def test_prompt_not_found():
+async def test_prompt_not_found() -> None:
     """Test that non-existent prompts return empty list."""
     async with AsyncExitStack() as stack:
         # Initialize multi-server client
