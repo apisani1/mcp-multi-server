@@ -415,19 +415,23 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
         """List enriched inventory items with optional filters. May contain large data."""
         items = []
 
-        for inventory_id in self._inventory_items:
+        for inventory_id, inventory_item_obj in self._inventory_items.items():
+            # Pre-filter on raw inventory data before expensive enrichment
+            if status and inventory_item_obj.status != status:
+                continue
+            if needs_reorder is not None and inventory_item_obj.needs_reorder != needs_reorder:
+                continue
+
+            # Only enrich items that passed pre-filters
             enriched_item = self.get_enriched_inventory_item(inventory_id)
-            if enriched_item:
-                items.append(enriched_item)
+            if not enriched_item:
+                continue
 
-        if category:
-            items = [item for item in items if item.category == category]
+            # Filter on enriched data (category requires product lookup)
+            if category and enriched_item.category != category:
+                continue
 
-        if status:
-            items = [item for item in items if item.status == status]
-
-        if needs_reorder is not None:
-            items = [item for item in items if item.needs_reorder == needs_reorder]
+            items.append(enriched_item)
 
         return sorted(items, key=lambda x: x.name)
 
