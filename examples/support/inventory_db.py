@@ -187,7 +187,7 @@ class InventoryItem(BaseModel):
         return datetime.now()
 
 
-class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
+class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Normalized in-memory inventory database with CRUD operations."""
 
     def __init__(self) -> None:
@@ -298,7 +298,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
         return inventory_item_obj
 
     def list_categories(self) -> List[Dict[str, str]]:
-        """List all categories.
+        """List all categories with names and descriptions.
 
         Returns:
             List of category dictionaries with name and description
@@ -308,16 +308,62 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
             for cat_data in self._categories.values()
         ]
 
-    def get_category(self, name: str) -> Optional[Dict[str, str]]:
-        """Get a category by name.
+    def get_products_by_category(self, category: str) -> List[Product]:
+        """Get products by product category."""
+        if category.lower() not in self._categories:
+            return []
+        for category_name, product_ids in self._category_index.items():
+            if category_name == category.lower():
+                items = []
+                for product_id in product_ids:
+                    product_obj = self._products.get(product_id)
+                    if product_obj:
+                        items.append(product_obj)
+                return sorted(items, key=lambda x: x.name)
+        return []
 
-        Args:
-            name: Category name (case-insensitive)
+    def get_category_stats(self) -> Dict[str, int]:
+        """Get item count by category."""
+        stats = {}
+        for category_name in self._categories:
+            count = 0
+            for inventory_id in self._inventory_items:
+                enriched_item = self.get_enriched_inventory_item(inventory_id)
+                if enriched_item and enriched_item.category.lower() == category_name:
+                    count += 1
+            if count > 0:
+                stats[category_name] = count
+        return stats
 
-        Returns:
-            Category dictionary or None if not found
-        """
-        return self._categories.get(name.lower())
+    def get_supplier_by_name(self, supplier_name: str) -> Optional[Supplier]:
+        """Get supplier by name (case-insensitive)."""
+        supplier_name_lower = supplier_name.lower()
+        for supplier_obj in self._suppliers.values():
+            if supplier_obj.name.lower() == supplier_name_lower:
+                return supplier_obj
+        return None
+
+    def list_suppliers(self) -> List[Supplier]:
+        """List all suppliers."""
+        return sorted(self._suppliers.values(), key=lambda x: x.name)
+
+    def get_products_by_supplier_name(self, supplier_name: str) -> List[Product]:
+        """Get products by supplier name."""
+        supplier_obj = self.get_supplier_by_name(supplier_name)
+        if not supplier_obj:
+            return []
+        items = []
+        for product_id, supplier_product_obj_ids in self._supplier_product_index.items():
+            for sp_id in supplier_product_obj_ids:
+                supplier_product_obj = self._supplier_products.get(sp_id)
+                if not supplier_product_obj:
+                    continue
+                if supplier_product_obj.supplier_id != supplier_obj.id:
+                    continue
+                product_obj = self._products.get(product_id)
+                if product_obj:
+                    items.append(product_obj)
+        return sorted(items, key=lambda x: x.name)
 
     def get_enriched_inventory_item(self, inventory_id: UUID) -> Optional[EnrichedInventoryItem]:
         """Get enriched inventory item with product and supplier data."""
@@ -406,6 +452,18 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
 
         return self.get_enriched_item_by_product_id(product_id)
 
+    def get_enriched_items_by_category(self, category: str) -> List[EnrichedInventoryItem]:
+        """Get enriched inventory items by product category."""
+        return self.list_enriched_items(category=category)
+
+    def get_enriched_items_by_supplier_name(self, supplier_name: str) -> List[EnrichedInventoryItem]:
+        """Get enriched inventoryitems by supplier name."""
+        return self.list_enriched_items(supplier_name=supplier_name)
+
+    def get_low_stock_items(self) -> List[EnrichedInventoryItem]:
+        """Get enriched items that need to be reordered."""
+        return self.list_enriched_items(needs_reorder=True)
+
     def list_enriched_items(
         self,
         category: Optional[str] = None,
@@ -413,7 +471,8 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
         needs_reorder: Optional[bool] = None,
         supplier_name: Optional[str] = None,
     ) -> List[EnrichedInventoryItem]:
-        """List enriched inventory items with optional filters. May contain large data."""
+        """List enriched inventory items with optional filters by category, status, reorder status, and supplier name.
+        Warning: May contain large data."""
         items = []
 
         for inventory_id, inventory_item_obj in self._inventory_items.items():
@@ -428,7 +487,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
             if not enriched_item:
                 continue
 
-            # Filter on enriched data (requires product/supplier lookup)
+            # Filter on enriched data (required for product category or supplier lookup)
             if category and enriched_item.category != category:
                 continue
             if supplier_name and (
@@ -459,23 +518,6 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
                 results.append(enriched_item)
 
         return sorted(results, key=lambda x: x.name)
-
-    def get_low_stock_items(self) -> List[EnrichedInventoryItem]:
-        """Get enriched items that need to be reordered."""
-        return [item for item in self.list_enriched_items() if item.needs_reorder]
-
-    def get_category_stats(self) -> Dict[str, int]:
-        """Get item count by category."""
-        stats = {}
-        for category_name in self._categories:
-            count = 0
-            for inventory_id in self._inventory_items:
-                enriched_item = self.get_enriched_inventory_item(inventory_id)
-                if enriched_item and enriched_item.category.lower() == category_name:
-                    count += 1
-            if count > 0:
-                stats[category_name] = count
-        return stats
 
     def get_inventory_value(self) -> Decimal:
         """Calculate total inventory value."""
