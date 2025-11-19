@@ -411,6 +411,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
         category: Optional[str] = None,
         status: Optional[ItemStatus] = None,
         needs_reorder: Optional[bool] = None,
+        supplier_name: Optional[str] = None,
     ) -> List[EnrichedInventoryItem]:
         """List enriched inventory items with optional filters. May contain large data."""
         items = []
@@ -427,8 +428,12 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
             if not enriched_item:
                 continue
 
-            # Filter on enriched data (category requires product lookup)
+            # Filter on enriched data (requires product/supplier lookup)
             if category and enriched_item.category != category:
+                continue
+            if supplier_name and (
+                not enriched_item.supplier_name or supplier_name.lower() not in enriched_item.supplier_name.lower()
+            ):
                 continue
 
             items.append(enriched_item)
