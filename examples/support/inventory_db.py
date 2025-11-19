@@ -18,19 +18,6 @@ from pydantic import (
 )
 
 
-class ItemCategory(str, Enum):
-    """Inventory item categories."""
-
-    BEVERAGES = "beverages"
-    FOOD = "food"
-    ELECTRONICS = "electronics"
-    BOOKS = "books"
-    CLOTHING = "clothing"
-    HOME_GARDEN = "home_garden"
-    OFFICE_SUPPLIES = "office_supplies"
-    OTHER = "other"
-
-
 class ItemStatus(str, Enum):
     """Inventory item status."""
 
@@ -89,7 +76,7 @@ class Product(BaseModel):
     id: UUID = Field(default_factory=uuid4, description="Unique product identifier")
     name: str = Field(..., min_length=1, max_length=100, description="Product name")
     description: Optional[str] = Field(None, max_length=500, description="Product description")
-    category: ItemCategory = Field(..., description="Product category")
+    category: str = Field(..., description="Product category")
     sku: Optional[str] = Field(None, max_length=50, description="Stock Keeping Unit")
     barcode: Optional[str] = Field(None, max_length=50, description="Product barcode")
     weight: Optional[Decimal] = Field(None, gt=0, description="Weight in kg")
@@ -140,7 +127,7 @@ class EnrichedInventoryItem(BaseModel):
     product_id: UUID
     name: str
     description: Optional[str]
-    category: ItemCategory
+    category: str
     sku: Optional[str]
     barcode: Optional[str]
     weight: Optional[Decimal]
@@ -205,6 +192,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self) -> None:
         # Core entities
+        self._categories: Dict[str, Dict[str, str]] = {}  # category_name -> {name, description}
         self._suppliers: Dict[str, Supplier] = {}
         self._products: Dict[UUID, Product] = {}
         self._supplier_products: Dict[UUID, SupplierProduct] = {}
@@ -213,9 +201,38 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
         # Indexes for fast lookups
         self._product_name_index: Dict[str, UUID] = {}
         self._product_sku_index: Dict[str, UUID] = {}
-        self._category_index: Dict[ItemCategory, List[UUID]] = {cat: [] for cat in ItemCategory}
+        self._category_index: Dict[str, List[UUID]] = {}  # category_name -> product_ids
         self._supplier_product_index: Dict[UUID, List[UUID]] = {}  # product_id -> supplier_product ids
         self._inventory_product_index: Dict[UUID, UUID] = {}  # inventory_id -> product_id
+
+    def add_category(self, name: str, description: Optional[str] = None) -> Dict[str, str]:
+        """Add a new product category.
+
+        Args:
+            name: Category name (case-insensitive, will be stored lowercase)
+            description: Optional category description
+
+        Returns:
+            Dictionary with category information
+
+        Raises:
+            ValueError: If category already exists
+        """
+        name_lower = name.lower()
+
+        # Check for duplicate categories (case-insensitive)
+        if name_lower in self._categories:
+            raise ValueError(f"Category '{name}' already exists")
+
+        category_info = {
+            "name": name_lower,
+            "description": description or "",
+        }
+
+        self._categories[name_lower] = category_info
+        self._category_index[name_lower] = []
+
+        return category_info
 
     def add_supplier(self, supplier_obj: Supplier) -> Supplier:
         """Add a new supplier."""
@@ -227,6 +244,13 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
 
     def add_product(self, product_obj: Product) -> Product:
         """Add a new product."""
+        # Validate category exists
+        category_lower = product_obj.category.lower()
+        if category_lower not in self._categories:
+            raise ValueError(
+                f"Category '{product_obj.category}' does not exist. " f"Please create it first using add_category()."
+            )
+
         # Check for duplicate names
         if product_obj.name.lower() in {name.lower() for name in self._product_name_index}:
             raise ValueError(f"Product with name '{product_obj.name}' already exists")
@@ -240,7 +264,12 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
         self._product_name_index[product_obj.name] = product_obj.id
         if product_obj.sku:
             self._product_sku_index[product_obj.sku] = product_obj.id
-        self._category_index[product_obj.category].append(product_obj.id)
+
+        # Initialize category index if needed and add product
+        if category_lower not in self._category_index:
+            self._category_index[category_lower] = []
+        self._category_index[category_lower].append(product_obj.id)
+
         self._supplier_product_index[product_obj.id] = []
 
         return product_obj
@@ -268,7 +297,29 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
 
         return inventory_item_obj
 
-    def get_enriched_item(self, inventory_id: UUID) -> Optional[EnrichedInventoryItem]:
+    def list_categories(self) -> List[Dict[str, str]]:
+        """List all categories.
+
+        Returns:
+            List of category dictionaries with name and description
+        """
+        return [
+            {"name": cat_data["name"], "description": cat_data["description"]}
+            for cat_data in self._categories.values()
+        ]
+
+    def get_category(self, name: str) -> Optional[Dict[str, str]]:
+        """Get a category by name.
+
+        Args:
+            name: Category name (case-insensitive)
+
+        Returns:
+            Category dictionary or None if not found
+        """
+        return self._categories.get(name.lower())
+
+    def get_enriched_inventory_item(self, inventory_id: UUID) -> Optional[EnrichedInventoryItem]:
         """Get enriched inventory item with product and supplier data."""
         inventory_item_obj = self._inventory_items.get(inventory_id)
         if not inventory_item_obj:
@@ -330,30 +381,42 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
             updated_at=inventory_item_obj.updated_at,
         )
 
+    def get_enriched_item_by_product_id(self, product_id: UUID) -> Optional[EnrichedInventoryItem]:
+        """Get enriched inventory item by product ID."""
+        # Find inventory item for this product
+        for inventory_id, inv_product_id in self._inventory_product_index.items():
+            if inv_product_id == product_id:
+                return self.get_enriched_inventory_item(inventory_id)
+
+        return None
+
     def get_enriched_item_by_name(self, name: str) -> Optional[EnrichedInventoryItem]:
         """Get enriched inventory item by product name."""
         product_id = self._product_name_index.get(name)
         if not product_id:
             return None
 
-        # Find inventory item for this product
-        for inventory_id, inv_product_id in self._inventory_product_index.items():
-            if inv_product_id == product_id:
-                return self.get_enriched_item(inventory_id)
+        return self.get_enriched_item_by_product_id(product_id)
 
-        return None
+    def get_enriched_item_by_sku(self, sku: str) -> Optional[EnrichedInventoryItem]:
+        """Get enriched inventory item by product SKU."""
+        product_id = self._product_sku_index.get(sku)
+        if not product_id:
+            return None
+
+        return self.get_enriched_item_by_product_id(product_id)
 
     def list_enriched_items(
         self,
-        category: Optional[ItemCategory] = None,
+        category: Optional[str] = None,
         status: Optional[ItemStatus] = None,
         needs_reorder: Optional[bool] = None,
     ) -> List[EnrichedInventoryItem]:
-        """List enriched inventory items with optional filters."""
+        """List enriched inventory items with optional filters. May contain large data."""
         items = []
 
         for inventory_id in self._inventory_items:
-            enriched_item = self.get_enriched_item(inventory_id)
+            enriched_item = self.get_enriched_inventory_item(inventory_id)
             if enriched_item:
                 items.append(enriched_item)
 
@@ -368,35 +431,13 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
 
         return sorted(items, key=lambda x: x.name)
 
-    def get_low_stock_items(self) -> List[EnrichedInventoryItem]:
-        """Get enriched items that need to be reordered."""
-        return [item for item in self.list_enriched_items() if item.needs_reorder]
-
-    def get_inventory_value(self) -> Decimal:
-        """Calculate total inventory value."""
-        total = sum(item.price * item.quantity_on_hand for item in self._inventory_items.values())
-        return Decimal(str(total))
-
-    def get_category_stats(self) -> Dict[str, int]:
-        """Get item count by category."""
-        stats = {}
-        for category in ItemCategory:
-            count = 0
-            for inventory_id in self._inventory_items:
-                enriched_item = self.get_enriched_item(inventory_id)
-                if enriched_item and enriched_item.category == category:
-                    count += 1
-            if count > 0:
-                stats[category.value] = count
-        return stats
-
     def search_enriched_items(self, query: str) -> List[EnrichedInventoryItem]:
-        """Search enriched items by name, description, or SKU."""
+        """Search enriched items by product name, description, or SKU."""
         query_lower = query.lower()
         results = []
 
         for inventory_id in self._inventory_items:
-            enriched_item = self.get_enriched_item(inventory_id)
+            enriched_item = self.get_enriched_inventory_item(inventory_id)
             if not enriched_item:
                 continue
 
@@ -410,11 +451,49 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
 
         return sorted(results, key=lambda x: x.name)
 
+    def get_low_stock_items(self) -> List[EnrichedInventoryItem]:
+        """Get enriched items that need to be reordered."""
+        return [item for item in self.list_enriched_items() if item.needs_reorder]
+
+    def get_category_stats(self) -> Dict[str, int]:
+        """Get item count by category."""
+        stats = {}
+        for category_name in self._categories:
+            count = 0
+            for inventory_id in self._inventory_items:
+                enriched_item = self.get_enriched_inventory_item(inventory_id)
+                if enriched_item and enriched_item.category.lower() == category_name:
+                    count += 1
+            if count > 0:
+                stats[category_name] = count
+        return stats
+
+    def get_inventory_value(self) -> Decimal:
+        """Calculate total inventory value."""
+        total = sum(item.price * item.quantity_on_hand for item in self._inventory_items.values())
+        return Decimal(str(total))
+
 
 # Initialize the database
 db = InventoryDatabase()
 
 # Initialize with normalized sample data
+# Create categories first
+categories_data = [
+    {"name": "beverages", "description": "Beverages and drinks"},
+    {"name": "food", "description": "Food items"},
+    {"name": "electronics", "description": "Electronic devices and accessories"},
+    {"name": "books", "description": "Books and publications"},
+    {"name": "clothing", "description": "Clothing and apparel"},
+    {"name": "home_garden", "description": "Home and garden supplies"},
+    {"name": "office_supplies", "description": "Office supplies and stationery"},
+    {"name": "other", "description": "Other miscellaneous items"},
+]
+
+for category_data in categories_data:
+    db.add_category(category_data["name"], category_data["description"])
+    print(f"Added category: {category_data['name']}")
+
 # Create sample suppliers
 suppliers_data = [
     {"id": "SUP-001", "name": "Colombian Coffee Co.", "contact_email": "orders@colombiancoffee.com"},
@@ -435,33 +514,33 @@ products_data = [
     {
         "name": "Premium Coffee Beans",
         "description": "High-quality Arabica coffee beans from Colombia",
-        "category": ItemCategory.BEVERAGES,
+        "category": "beverages",
         "sku": "COF-001",
         "weight": Decimal("1.0"),
     },
     {
         "name": "Earl Grey Tea",
         "description": "Classic Earl Grey black tea with bergamot",
-        "category": ItemCategory.BEVERAGES,
+        "category": "beverages",
         "sku": "TEA-001",
     },
     {
         "name": "Chocolate Chip Cookies",
         "description": "Fresh baked chocolate chip cookies",
-        "category": ItemCategory.FOOD,
+        "category": "food",
         "sku": "COOK-001",
     },
     {
         "name": "Wireless Bluetooth Headphones",
         "description": "High-quality wireless headphones with noise cancellation",
-        "category": ItemCategory.ELECTRONICS,
+        "category": "electronics",
         "sku": "ELEC-001",
         "weight": Decimal("0.3"),
     },
     {
         "name": "Python Programming Guide",
         "description": "Comprehensive guide to Python programming",
-        "category": ItemCategory.BOOKS,
+        "category": "books",
         "sku": "BOOK-001",
     },
 ]

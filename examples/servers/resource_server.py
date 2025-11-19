@@ -1,4 +1,7 @@
-from typing import List
+from typing import (
+    Dict,
+    List,
+)
 from urllib.parse import unquote
 from uuid import UUID
 
@@ -11,7 +14,6 @@ try:
         EnrichedInventoryItem,
         InventoryOverview,
         InventoryStatistics,
-        ItemCategory,
         ItemStatus,
         db,
     )
@@ -21,7 +23,6 @@ except ImportError:
         EnrichedInventoryItem,
         InventoryOverview,
         InventoryStatistics,
-        ItemCategory,
         ItemStatus,
         db,
     )
@@ -33,17 +34,39 @@ mcp = FastMCP("Inventory Management")
 @mcp.resource("inventory://overview")
 def get_inventory_overview() -> InventoryOverview:
     """Returns comprehensive inventory overview."""
-    total_items = len(db.list_enriched_items())
-    total_value = db.get_inventory_value()
-    low_stock_items = len(db.get_low_stock_items())
-    category_stats = db.get_category_stats()
-
     return InventoryOverview(
-        total_items=total_items,
-        total_value=total_value,
-        low_stock_items=low_stock_items,
-        category_stats=category_stats,
+        total_items=len(db.list_enriched_items()),
+        total_value=db.get_inventory_value(),
+        low_stock_items=len(db.get_low_stock_items()),
+        category_stats=db.get_category_stats(),
     )
+
+
+@mcp.resource("inventory://categories")
+def get_inventory_categories() -> List[Dict[str, str]]:
+    """Returns list of all valid inventory categories with names and descriptions."""
+    return db.list_categories()
+
+
+@mcp.resource("inventory://category/{category}")
+def get_items_by_category(category: str) -> List[EnrichedInventoryItem] | str:
+    """Get all inventory items in a specific category - Use category names from inventory://categories.
+
+    Examples: inventory://category/beverages, inventory://category/electronics
+    Returns: List of all items in the specified category."""
+    try:
+        cat_enum = str(category.lower())
+        items = db.list_enriched_items(category=cat_enum)
+
+        if not items:
+            return f"No items found in category '{category.title()}'."
+
+        return items
+
+    except ValueError:
+        valid_categories = db.list_categories()
+        valid_category_names = [cat["name"] for cat in valid_categories]
+        return f"Invalid category. Valid categories: {', '.join(valid_category_names)}"
 
 
 @mcp.resource("inventory://items")
@@ -56,12 +79,12 @@ def get_all_items() -> List[EnrichedInventoryItem]:
 def get_item_details(item_id: str) -> EnrichedInventoryItem | str:
     """Get detailed inventory item information by UUID.
 
-    Parameter: item_id (UUID string) - Use UUIDs from inventory://items resource.
+    Parameter: item_id (UUID string) - Use inventory UUIDs from inventory://items resource.
     Example: inventory://item/e6ec9f9f-19a3-49bd-8efe-97aca565afb0
     Returns: Complete item details including product info, pricing, stock levels, and supplier data."""
     try:
         uuid_id = UUID(item_id)
-        item = db.get_enriched_item(uuid_id)
+        item = db.get_enriched_inventory_item(uuid_id)
 
         if not item:
             return f"Item with ID {item_id} not found."
@@ -91,33 +114,6 @@ def get_item_by_name(item_name: str) -> EnrichedInventoryItem | str:
         return f"Item '{decoded_name}' not found."
 
     return item
-
-
-@mcp.resource("inventory://category/{category}")
-def get_items_by_category(category: str) -> List[EnrichedInventoryItem] | str:
-    """Get all inventory items in a specific category.
-
-    Parameter: category (string) - Valid categories are:
-    - beverages (coffee, tea, drinks)
-    - food (cookies, snacks, consumables)
-    - electronics (headphones, gadgets)
-    - books (guides, manuals, literature)
-    - clothing, home_garden, office_supplies, other
-
-    Examples: inventory://category/beverages, inventory://category/electronics
-    Returns: List of all items in the specified category."""
-    try:
-        cat_enum = ItemCategory(category.lower())
-        items = db.list_enriched_items(category=cat_enum)
-
-        if not items:
-            return f"No items found in category '{category.title()}'."
-
-        return items
-
-    except ValueError:
-        valid_categories = [cat.value for cat in ItemCategory]
-        return f"Invalid category. Valid categories: {', '.join(valid_categories)}"
 
 
 @mcp.resource("inventory://low-stock")
@@ -175,7 +171,7 @@ def get_inventory_database_schema() -> DatabaseSchema:
             "id": "UUID (Primary Key)",
             "name": "str",
             "description": "Optional[str]",
-            "category": "ItemCategory (Enum)",
+            "category": "str (Enum)",
             "sku": "Optional[str]",
             "barcode": "Optional[str]",
             "weight": "Optional[Decimal]",
@@ -349,7 +345,7 @@ def get_inventory_price_from_inventory_id(inventory_id: str) -> str:
     For cost analysis, use full item details from inventory://item/{item_id}."""
     try:
         uuid_id = UUID(inventory_id)
-        item = db.get_enriched_item(uuid_id)
+        item = db.get_enriched_inventory_item(uuid_id)
         if item:
             return str(item.price)
         return f"Item with ID {inventory_id} not found"
