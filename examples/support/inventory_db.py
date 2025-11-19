@@ -228,7 +228,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes
     def add_product(self, product_obj: Product) -> Product:
         """Add a new product."""
         # Check for duplicate names
-        if product_obj.name.lower() in [name.lower() for name in self._product_name_index]:
+        if product_obj.name.lower() in {name.lower() for name in self._product_name_index}:
             raise ValueError(f"Product with name '{product_obj.name}' already exists")
 
         # Check for duplicate SKUs
