@@ -31,23 +31,23 @@ def print_capabilities_summary(client: "MultiServerClient") -> None:
 
         if caps.tools and caps.tools.tools:
             print(f"  Tools ({len(caps.tools.tools)}):")
-            for tool in caps.tools.tools:
-                print(f"    - {tool.name}: {tool.description}")
+            for i, tool in enumerate(caps.tools.tools):
+                print(f"    - {i + 1}) {tool.name}: {tool.description}")
 
         if caps.resources and caps.resources.resources:
             print(f"  Resources ({len(caps.resources.resources)}):")
-            for resource in caps.resources.resources:
-                print(f"    - {resource.name}: {resource.uri}")
+            for i, resource in enumerate(caps.resources.resources):
+                print(f"    - {i + 1}) {resource.name}: {resource.uri}")
 
         if caps.resource_templates and caps.resource_templates.resourceTemplates:
             print(f"  Resource Templates ({len(caps.resource_templates.resourceTemplates)}):")
-            for template in caps.resource_templates.resourceTemplates:
-                print(f"    - {template.name}: {template.uriTemplate}")
+            for i, template in enumerate(caps.resource_templates.resourceTemplates):
+                print(f"    - {i + 1}) {template.name}: {template.uriTemplate}")
 
         if caps.prompts and caps.prompts.prompts:
             print(f"  Prompts ({len(caps.prompts.prompts)}):")
-            for prompt in caps.prompts.prompts:
-                print(f"    - {prompt.name}: {prompt.description}")
+            for i, prompt in enumerate(caps.prompts.prompts):
+                print(f"    - {i + 1}) {prompt.name}: {prompt.description}")
 
     print("\n" + "=" * 80 + "\n")
 
