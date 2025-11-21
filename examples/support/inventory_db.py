@@ -5,6 +5,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Union,
 )
 from uuid import (
     UUID,
@@ -164,20 +165,19 @@ class InventoryOverview(BaseModel):
 
     total_items: int
     total_value: Decimal
-    low_stock_items: int
+    low_stock_count: int
     category_stats: Dict[str, int]
+    category_percentages: Dict[str, float]
 
 
-class InventoryStatistics(BaseModel):
+class CategoryStatistics(BaseModel):
     """Comprehensive inventory statistics."""
 
     total_items: int
-    active_items: int
     total_value: Decimal
     low_stock_count: int
-    out_of_stock_count: int
-    category_stats: Dict[str, int]
-    category_percentages: Dict[str, float]
+    product_stats: Dict[str, int]
+    product_percentages: Dict[str, float]
 
 
 class DatabaseSchema(BaseModel):
@@ -534,9 +534,9 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         """
         return self.list_enriched_items(supplier_name=supplier_name)
 
-    def get_low_stock_items(self) -> List[EnrichedInventoryItem]:
+    def get_low_stock_items(self, category: Optional[str] = None) -> List[EnrichedInventoryItem]:
         """Get enriched items that need to be reordered."""
-        return self.list_enriched_items(needs_reorder=True)
+        return self.list_enriched_items(needs_reorder=True, category=category)
 
     def list_enriched_items(
         self,
@@ -606,9 +606,28 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
 
         return sorted(results, key=lambda x: x.name)
 
-    def get_inventory_value(self) -> Decimal:
+    def get_product_stats(self, category: str) -> Dict[str, int]:
+        """Get item count by product within a specific category."""
+        if category.lower() not in self._categories:
+            return {}
+        category_lower = category.lower()
+        stats: Dict[str, int] = {}
+        for inventory_id in self._inventory_items:
+            product_obj = self._products.get(self._inventory_product_index[inventory_id])
+            if not product_obj or category_lower not in product_obj.category.lower():
+                continue
+            product_name = product_obj.name
+            stats[product_name] = stats.get(product_name, 0) + 1
+        return stats
+
+    def get_inventory_value(self, category: Optional[str] = None) -> Decimal:
         """Calculate total inventory value."""
-        total = sum(item.price * item.quantity_on_hand for item in self._inventory_items.values())
+        all_items: Union[List[EnrichedInventoryItem], List[InventoryItem]]
+        if category:
+            all_items = self.list_enriched_items(category=category)
+        else:
+            all_items = list(self._inventory_items.values())
+        total = sum(item.price * item.quantity_on_hand for item in all_items)
         return Decimal(str(total))
 
 

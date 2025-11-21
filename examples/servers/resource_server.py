@@ -1,6 +1,7 @@
 from typing import (
     Dict,
     List,
+    Union,
 )
 from urllib.parse import unquote
 
@@ -9,66 +10,43 @@ from mcp.server.fastmcp import FastMCP
 
 try:
     from ..support.inventory_db import (
+        CategoryStatistics,
         DatabaseSchema,
         EnrichedInventoryItem,
         InventoryOverview,
-        InventoryStatistics,
-        ItemStatus,
         Product,
         Supplier,
         db,
     )
 except ImportError:
     from examples.support.inventory_db import (
+        CategoryStatistics,
         DatabaseSchema,
         EnrichedInventoryItem,
         InventoryOverview,
-        InventoryStatistics,
-        ItemStatus,
         Product,
         Supplier,
         db,
     )
 
 
-mcp = FastMCP("Inventory Management")
+mcp = FastMCP("Inventory Resource Server")
 
 
 @mcp.resource("inventory://overview")
 def get_inventory_overview() -> InventoryOverview:
     """Returns comprehensive inventory overview."""
-    return InventoryOverview(
-        total_items=len(db.list_enriched_items()),
-        total_value=db.get_inventory_value(),
-        low_stock_items=len(db.get_low_stock_items()),
-        category_stats=db.get_category_stats(),
-    )
-
-
-@mcp.resource("inventory://stats")
-def get_inventory_statistics() -> InventoryStatistics:
-    """Returns comprehensive inventory statistics."""
-    all_items = db.list_enriched_items()
-    total_items = len(all_items)
-    total_value = db.get_inventory_value()
+    total_items = len(db.list_enriched_items())
     category_stats = db.get_category_stats()
-    low_stock_count = len(db.get_low_stock_items())
-
-    # Calculate additional stats
-    active_items = len([item for item in all_items if item.status == ItemStatus.ACTIVE])
-    out_of_stock = len([item for item in all_items if item.quantity_on_hand <= 0])
-    category_percentages = {
-        category: (count / total_items * 100) if total_items > 0 else 0 for category, count in category_stats.items()
-    }
-
-    return InventoryStatistics(
+    return InventoryOverview(
         total_items=total_items,
-        active_items=active_items,
-        total_value=total_value,
-        low_stock_count=low_stock_count,
-        out_of_stock_count=out_of_stock,
+        total_value=db.get_inventory_value(),
+        low_stock_count=len(db.get_low_stock_items()),
         category_stats=category_stats,
-        category_percentages=category_percentages,
+        category_percentages={
+            category: (count / total_items * 100) if total_items > 0 else 0
+            for category, count in category_stats.items()
+        },
     )
 
 
@@ -207,8 +185,25 @@ def list_categories() -> List[Dict[str, str]]:
     return db.list_categories()
 
 
+@mcp.resource("inventory://category/stats/{category}")
+def get_category_statistics(category: str) -> CategoryStatistics:
+    """Returns comprehensive category statistics."""
+    total_items = len(db.list_enriched_items(category=category))
+    product_stats = db.get_product_stats(category=category)
+
+    return CategoryStatistics(
+        total_items=total_items,
+        total_value=db.get_inventory_value(category=category),
+        low_stock_count=len(db.get_low_stock_items(category=category)),
+        product_stats=product_stats,
+        product_percentages={
+            product: (count / total_items * 100) if total_items > 0 else 0 for product, count in product_stats.items()
+        },
+    )
+
+
 @mcp.resource("inventory://category/products/{category}")
-def get_products_by_category(category: str) -> List[Product] | str:
+def get_products_by_category(category: str) -> Union[List[Product], str]:
     """Get all products in a specific category - Use category names from inventory://categories.
     Examples: inventory://category/products/beverages, inventory://category/products/electronics
     Returns: List of all products in the specified category.
@@ -228,7 +223,7 @@ def get_products_by_category(category: str) -> List[Product] | str:
 
 
 @mcp.resource("inventory://category/items/{category}")
-def get_items_by_category(category: str) -> List[EnrichedInventoryItem] | str:
+def get_items_by_category(category: str) -> Union[List[EnrichedInventoryItem], str]:
     """Get all inventory items in a specific category - Use category names from inventory://categories.
 
     Examples: inventory://category/items/beverages, inventory://category/items/electronics
@@ -256,7 +251,7 @@ def list_suppliers() -> List[Supplier]:
 
 
 @mcp.resource("inventory://supplier/products/{supplier_name}")
-def get_products_by_supplier(supplier_name: str) -> List[Product] | str:
+def get_products_by_supplier(supplier_name: str) -> Union[List[Product], str]:
     """Get all products for a specific supplier - Use supplier names from inventory://suppliers.
 
     Examples: inventory://supplier/products/Colombian%20Coffee%20Co., inventory://supplier/products/TechSupply%20Inc.
@@ -276,7 +271,7 @@ def get_products_by_supplier(supplier_name: str) -> List[Product] | str:
 
 
 @mcp.resource("inventory://supplier/items/{supplier_name}")
-def get_items_by_supplier(supplier_name: str) -> List[EnrichedInventoryItem] | str:
+def get_items_by_supplier(supplier_name: str) -> Union[List[EnrichedInventoryItem], str]:
     """Get all inventory items for a specific supplier - Use supplier names from inventory://suppliers.
 
     Examples: inventory://supplier/items/Colombian%20Coffee%20Co., inventory://supplier/items/TechSupply%20Inc.
@@ -302,7 +297,7 @@ def list_products() -> List[Product]:
 
 
 @mcp.resource("inventory://product/item/{product_name}")
-def get_items_by_name(product_name: str) -> list[EnrichedInventoryItem] | str:
+def get_items_by_name(product_name: str) -> Union[List[EnrichedInventoryItem], str]:
     """Find inventory items by exact product name.
 
     Supports Many-to-One relationship: returns all inventory items for a product
@@ -326,7 +321,7 @@ def get_items_by_name(product_name: str) -> list[EnrichedInventoryItem] | str:
 
 
 @mcp.resource("inventory://search/item/{query}")
-def search_inventory(query: str) -> List[EnrichedInventoryItem] | str:
+def search_inventory(query: str) -> Union[List[EnrichedInventoryItem], str]:
     """Search inventory by keyword in product name, description, or SKU. Not case-sensitive.
 
     Parameter: query (string) - Search term to match against:
@@ -351,7 +346,7 @@ def search_inventory(query: str) -> List[EnrichedInventoryItem] | str:
 
 
 @mcp.resource("inventory://low-stock")
-def get_low_stock_items() -> List[EnrichedInventoryItem] | str:
+def get_low_stock_items() -> Union[List[EnrichedInventoryItem], str]:
     """Returns items that need to be reordered."""
     items = db.get_low_stock_items()
 
