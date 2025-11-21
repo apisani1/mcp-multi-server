@@ -390,6 +390,10 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
                     items.append(product_obj)
         return sorted(items, key=lambda x: x.name)
 
+    def list_products(self) -> List[Product]:
+        """List all products in the inventory."""
+        return sorted(self._products.values(), key=lambda x: x.name)
+
     def get_enriched_inventory_item(self, inventory_id: UUID) -> Optional[EnrichedInventoryItem]:
         """Get enriched inventory item with product and supplier data.
         Args:

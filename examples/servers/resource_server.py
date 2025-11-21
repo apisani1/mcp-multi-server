@@ -73,7 +73,7 @@ def get_inventory_statistics() -> InventoryStatistics:
 
 
 @mcp.resource("inventory://database-schema")
-def get_inventory_database_schema() -> DatabaseSchema:
+def get_database_schema() -> DatabaseSchema:
     """Returns the complete database schema definition."""
 
     # Define all entities with their field types
@@ -250,7 +250,7 @@ def get_items_by_category(category: str) -> List[EnrichedInventoryItem] | str:
 
 
 @mcp.resource("inventory://suppliers")
-def get_inventory_suppliers() -> List[Supplier]:
+def list_suppliers() -> List[Supplier]:
     """Returns list of all valid inventory suppliers with names and descriptions."""
     return db.list_suppliers()
 
@@ -293,6 +293,12 @@ def get_items_by_supplier(supplier_name: str) -> List[EnrichedInventoryItem] | s
         valid_suppliers = db.list_suppliers()
         valid_supplier_names = [supplier.name for supplier in valid_suppliers]
         return f"Invalid supplier name. Valid supplier names: {', '.join(valid_supplier_names)}"
+
+
+@mcp.resource("inventory://products")
+def list_products() -> List[Product]:
+    """Returns list of all products in the inventory."""
+    return db.list_products()
 
 
 @mcp.resource("inventory://product/item/{product_name}")
