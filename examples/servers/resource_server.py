@@ -3,7 +3,6 @@ from typing import (
     List,
 )
 from urllib.parse import unquote
-from uuid import UUID
 
 from mcp.server.fastmcp import FastMCP
 
@@ -15,6 +14,8 @@ try:
         InventoryOverview,
         InventoryStatistics,
         ItemStatus,
+        Product,
+        Supplier,
         db,
     )
 except ImportError:
@@ -24,6 +25,8 @@ except ImportError:
         InventoryOverview,
         InventoryStatistics,
         ItemStatus,
+        Product,
+        Supplier,
         db,
     )
 
@@ -42,114 +45,31 @@ def get_inventory_overview() -> InventoryOverview:
     )
 
 
-@mcp.resource("inventory://categories")
-def get_inventory_categories() -> List[Dict[str, str]]:
-    """Returns list of all valid inventory categories with names and descriptions."""
-    return db.list_categories()
+@mcp.resource("inventory://stats")
+def get_inventory_statistics() -> InventoryStatistics:
+    """Returns comprehensive inventory statistics."""
+    all_items = db.list_enriched_items()
+    total_items = len(all_items)
+    total_value = db.get_inventory_value()
+    category_stats = db.get_category_stats()
+    low_stock_count = len(db.get_low_stock_items())
 
+    # Calculate additional stats
+    active_items = len([item for item in all_items if item.status == ItemStatus.ACTIVE])
+    out_of_stock = len([item for item in all_items if item.quantity_on_hand <= 0])
+    category_percentages = {
+        category: (count / total_items * 100) if total_items > 0 else 0 for category, count in category_stats.items()
+    }
 
-@mcp.resource("inventory://category/{category}")
-def get_items_by_category(category: str) -> List[EnrichedInventoryItem] | str:
-    """Get all inventory items in a specific category - Use category names from inventory://categories.
-
-    Examples: inventory://category/beverages, inventory://category/electronics
-    Returns: List of all items in the specified category."""
-    try:
-        cat_enum = str(category.lower())
-        items = db.list_enriched_items(category=cat_enum)
-
-        if not items:
-            return f"No items found in category '{category.title()}'."
-
-        return items
-
-    except ValueError:
-        valid_categories = db.list_categories()
-        valid_category_names = [cat["name"] for cat in valid_categories]
-        return f"Invalid category. Valid categories: {', '.join(valid_category_names)}"
-
-
-@mcp.resource("inventory://items")
-def get_all_items() -> List[EnrichedInventoryItem]:
-    """Returns list of all inventory items."""
-    return db.list_enriched_items()
-
-
-@mcp.resource("inventory://item/{item_id}")
-def get_item_details(item_id: str) -> EnrichedInventoryItem | str:
-    """Get detailed inventory item information by UUID.
-
-    Parameter: item_id (UUID string) - Use inventory UUIDs from inventory://items resource.
-    Example: inventory://item/e6ec9f9f-19a3-49bd-8efe-97aca565afb0
-    Returns: Complete item details including product info, pricing, stock levels, and supplier data."""
-    try:
-        uuid_id = UUID(item_id)
-        item = db.get_enriched_inventory_item(uuid_id)
-
-        if not item:
-            return f"Item with ID {item_id} not found."
-
-        return item
-
-    except ValueError:
-        return f"Invalid item ID format: {item_id}"
-
-
-@mcp.resource("inventory://item/name/{item_name}")
-def get_item_by_name(item_name: str) -> EnrichedInventoryItem | str:
-    """Find inventory item by exact product name.
-
-    Parameter: item_name (string) - Exact product name (case-sensitive).
-    Note: Names with spaces should be URL-encoded (e.g., %20 for spaces).
-    Examples:
-    - inventory://item/name/Premium%20Coffee%20Beans
-    - inventory://item/name/Earl%20Grey%20Tea
-    - inventory://item/name/Chocolate%20Chip%20Cookies
-    Returns: Complete item details if name matches exactly."""
-    # URL decode the item name to handle spaces and special characters
-    decoded_name = unquote(item_name)
-    item = db.get_enriched_item_by_name(decoded_name)
-
-    if not item:
-        return f"Item '{decoded_name}' not found."
-
-    return item
-
-
-@mcp.resource("inventory://low-stock")
-def get_low_stock_items() -> List[EnrichedInventoryItem] | str:
-    """Returns items that need to be reordered."""
-    items = db.get_low_stock_items()
-
-    if not items:
-        return "✅ All items are adequately stocked!"
-
-    return items
-
-
-@mcp.resource("inventory://search/{query}")
-def search_inventory(query: str) -> List[EnrichedInventoryItem] | str:
-    """Search inventory by keyword in name, description, or SKU.
-
-    Parameter: query (string) - Search term to match against:
-    - Product names (e.g., 'coffee', 'bluetooth', 'python')
-    - Descriptions (e.g., 'wireless', 'high-quality', 'fresh')
-    - SKUs (e.g., 'COF-001', 'ELEC-001', 'BOOK-001')
-    Note: Queries with spaces should be URL-encoded (e.g., %20 for spaces).
-
-    Examples:
-    - inventory://search/coffee (finds coffee-related items)
-    - inventory://search/wireless (finds wireless products)
-    - inventory://search/chip%20cookies (finds items with "chip cookies")
-    Returns: List of matching items, sorted by name."""
-    # URL decode the query to handle spaces and special characters
-    decoded_query = unquote(query)
-    items = db.search_enriched_items(decoded_query)
-
-    if not items:
-        return f"No items found matching '{decoded_query}'."
-
-    return items
+    return InventoryStatistics(
+        total_items=total_items,
+        active_items=active_items,
+        total_value=total_value,
+        low_stock_count=low_stock_count,
+        out_of_stock_count=out_of_stock,
+        category_stats=category_stats,
+        category_percentages=category_percentages,
+    )
 
 
 @mcp.resource("inventory://database-schema")
@@ -158,6 +78,10 @@ def get_inventory_database_schema() -> DatabaseSchema:
 
     # Define all entities with their field types
     entities = {
+        "Category": {
+            "name": "str (Primary Key)",
+            "description": "Optional[str]",
+        },
         "Supplier": {
             "id": "str (Primary Key)",
             "name": "str",
@@ -277,140 +201,158 @@ def get_inventory_database_schema() -> DatabaseSchema:
     )
 
 
-@mcp.resource("inventory://stats")
-def get_inventory_statistics() -> InventoryStatistics:
-    """Returns comprehensive inventory statistics."""
-    total_items = len(db.list_enriched_items())
-    total_value = db.get_inventory_value()
-    category_stats = db.get_category_stats()
-    low_stock_count = len(db.get_low_stock_items())
-
-    # Calculate additional stats
-    active_items = len(db.list_enriched_items(status=ItemStatus.ACTIVE))
-    all_items = db.list_enriched_items()
-    out_of_stock = len([item for item in all_items if item.quantity_on_hand == 0])
-
-    # Calculate category percentages
-    category_percentages = {
-        category: (count / total_items * 100) if total_items > 0 else 0 for category, count in category_stats.items()
-    }
-
-    return InventoryStatistics(
-        total_items=total_items,
-        active_items=active_items,
-        total_value=total_value,
-        low_stock_count=low_stock_count,
-        out_of_stock_count=out_of_stock,
-        category_stats=category_stats,
-        category_percentages=category_percentages,
-    )
+@mcp.resource("inventory://categories")
+def list_categories() -> List[Dict[str, str]]:
+    """Returns list of all valid product categories with names and descriptions."""
+    return db.list_categories()
 
 
-# Legacy endpoints for backward compatibility
-@mcp.resource("inventory://{inventory_name}/id")
-def get_inventory_id_from_inventory_name(inventory_name: str) -> str:
-    """Get UUID identifier for an item by its exact product name.
-
-    Parameter: inventory_name (string) - Exact product name (case-sensitive).
-    Note: Names with spaces should be URL-encoded (e.g., %20 for spaces).
-    Available names: Premium Coffee Beans, Earl Grey Tea, Chocolate Chip Cookies,
-    Wireless Bluetooth Headphones, Python Programming Guide
-
-    Examples:
-    - inventory://Premium%20Coffee%20Beans/id
-    - inventory://Chocolate%20Chip%20Cookies/id
-    Returns: UUID string that can be used in other resource templates.
-    Use this to get IDs for the inventory://item/{item_id} template."""
-    # URL decode the inventory name to handle spaces and special characters
-    decoded_name = unquote(inventory_name)
-    item = db.get_enriched_item_by_name(decoded_name)
-    if item:
-        return str(item.id)
-    return f"Item '{decoded_name}' not found"
-
-
-@mcp.resource("inventory://{inventory_id}/price")
-def get_inventory_price_from_inventory_id(inventory_id: str) -> str:
-    """Get current selling price for an item by UUID or name.
-
-    Parameter: inventory_id (string) - Either:
-    - UUID from inventory://items resource
-    - Exact product name (fallback for compatibility)
-
-    Examples:
-    - inventory://e6ec9f9f-19a3-49bd-8efe-97aca565afb0/price
-    - inventory://Premium Coffee Beans/price (legacy)
-
-    Returns: Current selling price as decimal string (e.g., '12.99').
-    For cost analysis, use full item details from inventory://item/{item_id}."""
-    try:
-        uuid_id = UUID(inventory_id)
-        item = db.get_enriched_inventory_item(uuid_id)
-        if item:
-            return str(item.price)
-        return f"Item with ID {inventory_id} not found"
-    except ValueError:
-        # Try to find by name for backward compatibility (URL decode for spaces)
-        decoded_name = unquote(inventory_id)
-        item = db.get_enriched_item_by_name(decoded_name)
-        if item:
-            return str(item.price)
-        return f"Invalid ID format or item not found: {decoded_name}"
-
-
-@mcp.resource("inventory://templates")
-def get_available_templates() -> str:
-    """List all available resource templates with examples and current item IDs.
-
-    This resource helps Claude understand what templates are available and shows
-    current valid values that can be used in the templates.
+@mcp.resource("inventory://category/products/{category}")
+def get_products_by_category(category: str) -> List[Product] | str:
+    """Get all products in a specific category - Use category names from inventory://categories.
+    Examples: inventory://category/products/beverages, inventory://category/products/electronics
+    Returns: List of all products in the specified category.
     """
-    # Get current items for examples
-    items = db.list_enriched_items()
+    try:
+        category_lower = category.lower()
+        products = db.get_products_by_category(category=category_lower)
+
+        if not products:
+            return f"No products found in category '{category.title()}'."
+
+        return products
+    except ValueError:
+        valid_categories = db.list_categories()
+        valid_category_names = [cat["name"] for cat in valid_categories]
+        return f"Invalid category. Valid categories: {', '.join(valid_category_names)}"
+
+
+@mcp.resource("inventory://category/items/{category}")
+def get_items_by_category(category: str) -> List[EnrichedInventoryItem] | str:
+    """Get all inventory items in a specific category - Use category names from inventory://categories.
+
+    Examples: inventory://category/items/beverages, inventory://category/items/electronics
+    Returns: List of all items in the specified category.
+    """
+    try:
+        category_lower = category.lower()
+        items = db.get_enriched_items_by_category(category=category_lower)
+
+        if not items:
+            return f"No items found in category '{category.title()}'."
+
+        return items
+
+    except ValueError:
+        valid_categories = db.list_categories()
+        valid_category_names = [cat["name"] for cat in valid_categories]
+        return f"Invalid category. Valid categories: {', '.join(valid_category_names)}"
+
+
+@mcp.resource("inventory://suppliers")
+def get_inventory_suppliers() -> List[Supplier]:
+    """Returns list of all valid inventory suppliers with names and descriptions."""
+    return db.list_suppliers()
+
+
+@mcp.resource("inventory://supplier/products/{supplier_name}")
+def get_products_by_supplier(supplier_name: str) -> List[Product] | str:
+    """Get all products for a specific supplier - Use supplier names from inventory://suppliers.
+
+    Examples: inventory://supplier/products/Colombian%20Coffee%20Co., inventory://supplier/products/TechSupply%20Inc.
+    Returns: List of all products supplied by the specified supplier.
+    """
+    try:
+        products = db.get_products_by_supplier_name(supplier_name)
+
+        if not products:
+            return f"No products found for supplier '{supplier_name}'."
+
+        return products
+    except ValueError:
+        valid_suppliers = db.list_suppliers()
+        valid_supplier_names = [supplier.name for supplier in valid_suppliers]
+        return f"Invalid supplier name. Valid supplier names: {', '.join(valid_supplier_names)}"
+
+
+@mcp.resource("inventory://supplier/items/{supplier_name}")
+def get_items_by_supplier(supplier_name: str) -> List[EnrichedInventoryItem] | str:
+    """Get all inventory items for a specific supplier - Use supplier names from inventory://suppliers.
+
+    Examples: inventory://supplier/items/Colombian%20Coffee%20Co., inventory://supplier/items/TechSupply%20Inc.
+    Returns: List of all inventory items supplied by the specified supplier."""
+    try:
+        items = db.get_enriched_items_by_supplier_name(supplier_name)
+
+        if not items:
+            return f"No items found for supplier '{supplier_name}'."
+
+        return items
+
+    except ValueError:
+        valid_suppliers = db.list_suppliers()
+        valid_supplier_names = [supplier.name for supplier in valid_suppliers]
+        return f"Invalid supplier name. Valid supplier names: {', '.join(valid_supplier_names)}"
+
+
+@mcp.resource("inventory://product/item/{product_name}")
+def get_items_by_name(product_name: str) -> list[EnrichedInventoryItem] | str:
+    """Find inventory items by exact product name.
+
+    Supports Many-to-One relationship: returns all inventory items for a product
+    (e.g., same product tracked at different locations).
+
+    Parameter: product_name (string) - Exact product name (case-sensitive).
+    Note: Names with spaces should be URL-encoded (e.g., %20 for spaces).
+    Examples:
+    - inventory://product/item/Premium%20Coffee%20Beans
+    - inventory://product/item/Earl%20Grey%20Tea
+    - inventory://product/item/Chocolate%20Chip%20Cookies
+    Returns: List of inventory items if name matches exactly, or error message if not found."""
+    # URL decode the product name to handle spaces and special characters
+    decoded_name = unquote(product_name)
+    items = db.get_enriched_items_by_name(decoded_name)
+
     if not items:
-        return "No inventory items available"
+        return f"Item '{decoded_name}' not found."
 
-    sample_item = items[0]
-    sample_name = sample_item.name
-    sample_id = str(sample_item.id)
+    return items
 
-    template_info = f"""
-AVAILABLE RESOURCE TEMPLATES:
 
-1. Get item by ID:
-   Template: inventory://item/{{item_id}}
-   Example: inventory://item/{sample_id}
-   Description: Get detailed item info by UUID from inventory://items
+@mcp.resource("inventory://search/item/{query}")
+def search_inventory(query: str) -> List[EnrichedInventoryItem] | str:
+    """Search inventory by keyword in product name, description, or SKU. Not case-sensitive.
 
-2. Get item by name:
-   Template: inventory://item/name/{{item_name}}
-   Example: inventory://item/name/{sample_name}
-   Description: Get item info by exact product name
+    Parameter: query (string) - Search term to match against:
+    - Product names (e.g., 'coffee', 'bluetooth', 'python')
+    - Product descriptions (e.g., 'wireless', 'high-quality', 'fresh')
+    - Product SKUs (e.g., 'COF-001', 'ELEC-001', 'BOOK-001')
+    Note: Queries with spaces should be URL-encoded (e.g., %20 for spaces).
 
-3. Get items by category:
-   Template: inventory://category/{{category}}
-   Examples: inventory://category/beverages, inventory://category/electronics
-   Valid categories: beverages, food, electronics, books, clothing, home_garden, office_supplies, other
+    Examples:
+    - inventory://search/item/coffee (finds coffee-related items)
+    - inventory://search/item/wireless (finds wireless products)
+    - inventory://search/item/chip%20cookies (finds items with "chip cookies")
+    Returns: List of matching items, sorted by name."""
+    # URL decode the query to handle spaces and special characters
+    decoded_query = unquote(query)
+    items = db.search_enriched_items(decoded_query)
 
-4. Search items:
-   Template: inventory://search/{{query}}
-   Examples: inventory://search/coffee, inventory://search/wireless, inventory://search/COF-001
+    if not items:
+        return f"No items found matching '{decoded_query}'."
 
-5. Get item ID by name (legacy):
-   Template: inventory://{{inventory_name}}/id
-   Example: inventory://{sample_name}/id
+    return items
 
-6. Get item price by ID (legacy):
-   Template: inventory://{{inventory_id}}/price
-   Example: inventory://{sample_id}/price
 
-CURRENT AVAILABLE ITEMS:
-{chr(10).join(f'- {item.name} (ID: {item.id})' for item in items[:5])}
-{'...' if len(items) > 5 else ''}
+@mcp.resource("inventory://low-stock")
+def get_low_stock_items() -> List[EnrichedInventoryItem] | str:
+    """Returns items that need to be reordered."""
+    items = db.get_low_stock_items()
 
-To use templates, replace {{parameter}} with actual values from the examples above.
-"""
-    return template_info.strip()
+    if not items:
+        return "✅ All items are adequately stocked!"
+
+    return items
 
 
 if __name__ == "__main__":

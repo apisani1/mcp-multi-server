@@ -27,37 +27,6 @@ class ItemStatus(str, Enum):
     DISCONTINUED = "discontinued"
 
 
-class InventoryOverview(BaseModel):
-    """Inventory overview summary."""
-
-    total_items: int
-    total_value: Decimal
-    low_stock_items: int
-    category_stats: Dict[str, int]
-
-
-class InventoryStatistics(BaseModel):
-    """Comprehensive inventory statistics."""
-
-    total_items: int
-    active_items: int
-    total_value: Decimal
-    low_stock_count: int
-    out_of_stock_count: int
-    category_stats: Dict[str, int]
-    category_percentages: Dict[str, float]
-
-
-class DatabaseSchema(BaseModel):
-    """Complete database schema definition."""
-
-    entities: Dict[str, Dict[str, str]]
-    relationships: List[Dict[str, str]]
-    indexes: Dict[str, List[str]]
-    normalization_level: str
-    description: str
-
-
 class Supplier(BaseModel):
     """Supplier entity."""
 
@@ -185,6 +154,40 @@ class EnrichedInventoryItem(BaseModel):
     # Timestamps
     created_at: datetime
     updated_at: datetime
+
+
+# Summary and statistics models
+
+
+class InventoryOverview(BaseModel):
+    """Inventory overview summary."""
+
+    total_items: int
+    total_value: Decimal
+    low_stock_items: int
+    category_stats: Dict[str, int]
+
+
+class InventoryStatistics(BaseModel):
+    """Comprehensive inventory statistics."""
+
+    total_items: int
+    active_items: int
+    total_value: Decimal
+    low_stock_count: int
+    out_of_stock_count: int
+    category_stats: Dict[str, int]
+    category_percentages: Dict[str, float]
+
+
+class DatabaseSchema(BaseModel):
+    """Complete database schema definition."""
+
+    entities: Dict[str, Dict[str, str]]
+    relationships: List[Dict[str, str]]
+    indexes: Dict[str, List[str]]
+    normalization_level: str
+    description: str
 
 
 class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -356,7 +359,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         """
         supplier_name_lower = supplier_name.lower()
         for supplier_obj in self._suppliers.values():
-            if supplier_obj.name.lower() == supplier_name_lower:
+            if supplier_name_lower in supplier_obj.name.lower():
                 return supplier_obj
         return None
 
@@ -454,44 +457,60 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
             updated_at=inventory_item_obj.updated_at,
         )
 
-    def get_enriched_item_by_product_id(self, product_id: UUID) -> Optional[EnrichedInventoryItem]:
-        """Get enriched inventory item by product ID.
+    def get_enriched_items_by_product_id(self, product_id: UUID) -> List[EnrichedInventoryItem]:
+        """Get enriched inventory items by product ID.
+
+        Supports Many-to-One relationship: multiple inventory items can reference
+        the same product (e.g., same product at different locations).
+
         Args:
             product_id: Product ID to search for
         Returns:
-            EnrichedInventoryItem object if found, else None"""
-        # Find inventory item for this product
+            List of EnrichedInventoryItem objects (empty list if none found)
+        """
+        items = []
+        # Find all inventory items for this product
         for inventory_id, inv_product_id in self._inventory_product_index.items():
             if inv_product_id == product_id:
-                return self.get_enriched_inventory_item(inventory_id)
+                item = self.get_enriched_inventory_item(inventory_id)
+                if item:
+                    items.append(item)
 
-        return None
+        return items
 
-    def get_enriched_item_by_name(self, name: str) -> Optional[EnrichedInventoryItem]:
-        """Get enriched inventory item by product name.
+    def get_enriched_items_by_name(self, name: str) -> List[EnrichedInventoryItem]:
+        """Get enriched inventory items by product name.
+
+        Supports Many-to-One relationship: multiple inventory items can reference
+        the same product (e.g., same product at different locations).
+
         Args:
             name: Product name to search for
         Returns:
-            EnrichedInventoryItem object if found, else None
+            List of EnrichedInventoryItem objects (empty list if none found)
         """
         product_id = self._product_name_index.get(name)
         if not product_id:
-            return None
+            return []
 
-        return self.get_enriched_item_by_product_id(product_id)
+        return self.get_enriched_items_by_product_id(product_id)
 
-    def get_enriched_item_by_sku(self, sku: str) -> Optional[EnrichedInventoryItem]:
-        """Get enriched inventory item by product SKU.
+    def get_enriched_items_by_sku(self, sku: str) -> List[EnrichedInventoryItem]:
+        """Get enriched inventory items by product SKU.
+
+        Supports Many-to-One relationship: multiple inventory items can reference
+        the same product (e.g., same product at different locations).
+
         Args:
             sku: Product SKU to search for
         Returns:
-            EnrichedInventoryItem object if found, else None
+            List of EnrichedInventoryItem objects (empty list if none found)
         """
         product_id = self._product_sku_index.get(sku)
         if not product_id:
-            return None
+            return []
 
-        return self.get_enriched_item_by_product_id(product_id)
+        return self.get_enriched_items_by_product_id(product_id)
 
     def get_enriched_items_by_category(self, category: str) -> List[EnrichedInventoryItem]:
         """Get enriched inventory items by product category.
