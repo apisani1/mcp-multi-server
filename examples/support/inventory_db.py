@@ -106,45 +106,6 @@ class SupplierProduct(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
 
 
-class EnrichedInventoryItem(BaseModel):
-    """Inventory item enriched with product and supplier data for API responses."""
-
-    # Inventory data
-    id: UUID
-    status: ItemStatus
-    price: Decimal
-    quantity_on_hand: int
-    quantity_reserved: int
-    quantity_allocated: int
-    available_quantity: int
-    reorder_point: int
-    max_stock: int
-    needs_reorder: bool
-    location_id: Optional[str]
-    last_restocked_at: Optional[datetime]
-
-    # Product data
-    product_id: UUID
-    name: str
-    description: Optional[str]
-    category: str
-    sku: Optional[str]
-    barcode: Optional[str]
-    weight: Optional[Decimal]
-    dimensions: Optional[str]
-
-    # Supplier data (from primary supplier)
-    supplier_id: Optional[str]
-    supplier_name: Optional[str]
-    supplier_part_number: Optional[str]
-    cost: Optional[Decimal]
-    profit_margin: Optional[Decimal]
-
-    # Timestamps
-    created_at: datetime
-    updated_at: datetime
-
-
 class InventoryItem(BaseModel):
     """Normalized inventory item - focuses only on inventory tracking."""
 
@@ -187,20 +148,59 @@ class InventoryItem(BaseModel):
         return datetime.now()
 
 
+class EnrichedInventoryItem(BaseModel):
+    """Inventory item enriched with product and supplier data for API responses."""
+
+    # Inventory data
+    id: UUID
+    status: ItemStatus
+    price: Decimal
+    quantity_on_hand: int
+    quantity_reserved: int
+    quantity_allocated: int
+    available_quantity: int
+    reorder_point: int
+    max_stock: int
+    needs_reorder: bool
+    location_id: Optional[str]
+    last_restocked_at: Optional[datetime]
+
+    # Product data
+    product_id: UUID
+    name: str
+    description: Optional[str]
+    category: str
+    sku: Optional[str]
+    barcode: Optional[str]
+    weight: Optional[Decimal]
+    dimensions: Optional[str]
+
+    # Supplier data (from primary supplier)
+    supplier_id: Optional[str]
+    supplier_name: Optional[str]
+    supplier_part_number: Optional[str]
+    cost: Optional[Decimal]
+    profit_margin: Optional[Decimal]
+
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+
+
 class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Normalized in-memory inventory database with CRUD operations."""
 
     def __init__(self) -> None:
         # Core entities
         self._categories: Dict[str, Dict[str, str]] = {}  # category_name -> {name, description}
-        self._suppliers: Dict[str, Supplier] = {}
-        self._products: Dict[UUID, Product] = {}
-        self._supplier_products: Dict[UUID, SupplierProduct] = {}
-        self._inventory_items: Dict[UUID, InventoryItem] = {}
+        self._suppliers: Dict[str, Supplier] = {}  # supplier_id -> Supplier
+        self._products: Dict[UUID, Product] = {}  # product_id -> Product
+        self._supplier_products: Dict[UUID, SupplierProduct] = {}  # supplier_product_id -> SupplierProduct
+        self._inventory_items: Dict[UUID, InventoryItem] = {}  # inventory_id -> InventoryItem
 
         # Indexes for fast lookups
-        self._product_name_index: Dict[str, UUID] = {}
-        self._product_sku_index: Dict[str, UUID] = {}
+        self._product_name_index: Dict[str, UUID] = {}  # product_name -> product_id
+        self._product_sku_index: Dict[str, UUID] = {}  # sku -> product_id
         self._category_index: Dict[str, List[UUID]] = {}  # category_name -> product_ids
         self._supplier_product_index: Dict[UUID, List[UUID]] = {}  # product_id -> supplier_product ids
         self._inventory_product_index: Dict[UUID, UUID] = {}  # inventory_id -> product_id
@@ -297,46 +297,63 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
 
         return inventory_item_obj
 
-    def list_categories(self) -> List[Dict[str, str]]:
-        """List all categories with names and descriptions.
-
+    def get_category_by_name(self, category_name: str) -> Optional[Dict[str, str]]:
+        """Get category by name (case-insensitive).
+        Args:
+            category_name: Category name to search for
         Returns:
-            List of category dictionaries with name and description
+            Dictionary with category information if found, else None
         """
-        return [
-            {"name": cat_data["name"], "description": cat_data["description"]}
-            for cat_data in self._categories.values()
-        ]
+        return self._categories.get(category_name.lower())
+
+    def list_categories(self) -> List[Dict[str, str]]:
+        """List all categories with names and descriptions."""
+        return sorted(self._categories.values(), key=lambda x: x["name"])
 
     def get_products_by_category(self, category: str) -> List[Product]:
-        """Get products by product category."""
-        if category.lower() not in self._categories:
+        """Get products by product category.
+        Args:
+            category: Category name (case-insensitive)
+        Returns:
+            List of Product objects in the specified category
+        """
+        category_lower = category.lower()
+        if category_lower not in self._categories:
             return []
-        for category_name, product_ids in self._category_index.items():
-            if category_name == category.lower():
-                items = []
-                for product_id in product_ids:
-                    product_obj = self._products.get(product_id)
-                    if product_obj:
-                        items.append(product_obj)
-                return sorted(items, key=lambda x: x.name)
-        return []
+        product_list = []
+        for product_id in self._category_index.get(category_lower, []):
+            product_obj = self._products.get(product_id)
+            if product_obj:
+                product_list.append(product_obj)
+        return sorted(product_list, key=lambda x: x.name)
 
     def get_category_stats(self) -> Dict[str, int]:
         """Get item count by category."""
-        stats = {}
-        for category_name in self._categories:
-            count = 0
-            for inventory_id in self._inventory_items:
-                enriched_item = self.get_enriched_inventory_item(inventory_id)
-                if enriched_item and enriched_item.category.lower() == category_name:
-                    count += 1
-            if count > 0:
-                stats[category_name] = count
+        stats: Dict[str, int] = {}
+        for inventory_id in self._inventory_items:
+            product_obj = self._products.get(self._inventory_product_index[inventory_id])
+            if not product_obj:
+                continue
+            category_name = product_obj.category.lower()
+            stats[category_name] = stats.get(category_name, 0) + 1
         return stats
 
+    def get_supplier_by_id(self, supplier_id: str) -> Optional[Supplier]:
+        """Get supplier by ID.
+        Args:
+            supplier_id: Supplier ID to search for
+        Returns:
+            Supplier object if found, else None
+        """
+        return self._suppliers.get(supplier_id)
+
     def get_supplier_by_name(self, supplier_name: str) -> Optional[Supplier]:
-        """Get supplier by name (case-insensitive)."""
+        """Get supplier by name (case-insensitive).
+        Args:
+            supplier_name: Supplier name to search for
+        Returns:
+            Supplier object if found, else None
+        """
         supplier_name_lower = supplier_name.lower()
         for supplier_obj in self._suppliers.values():
             if supplier_obj.name.lower() == supplier_name_lower:
@@ -348,14 +365,19 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         return sorted(self._suppliers.values(), key=lambda x: x.name)
 
     def get_products_by_supplier_name(self, supplier_name: str) -> List[Product]:
-        """Get products by supplier name."""
+        """Get products by supplier name.
+        Args:
+            supplier_name: Supplier name to search for
+        Returns:
+            List of Product objects supplied by the specified supplier
+        """
         supplier_obj = self.get_supplier_by_name(supplier_name)
         if not supplier_obj:
             return []
         items = []
         for product_id, supplier_product_obj_ids in self._supplier_product_index.items():
-            for sp_id in supplier_product_obj_ids:
-                supplier_product_obj = self._supplier_products.get(sp_id)
+            for supplier_product_obj_id in supplier_product_obj_ids:
+                supplier_product_obj = self._supplier_products.get(supplier_product_obj_id)
                 if not supplier_product_obj:
                     continue
                 if supplier_product_obj.supplier_id != supplier_obj.id:
@@ -366,7 +388,12 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         return sorted(items, key=lambda x: x.name)
 
     def get_enriched_inventory_item(self, inventory_id: UUID) -> Optional[EnrichedInventoryItem]:
-        """Get enriched inventory item with product and supplier data."""
+        """Get enriched inventory item with product and supplier data.
+        Args:
+            inventory_id: Inventory item ID
+        Returns:
+            EnrichedInventoryItem object if found, else None
+        """
         inventory_item_obj = self._inventory_items.get(inventory_id)
         if not inventory_item_obj:
             return None
@@ -382,8 +409,8 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         cost = None
 
         supplier_product_ids = self._supplier_product_index.get(product_obj.id, [])
-        for sp_id in supplier_product_ids:
-            supplier_product_obj = self._supplier_products.get(sp_id)
+        for supplier_product_id in supplier_product_ids:
+            supplier_product_obj = self._supplier_products.get(supplier_product_id)
             if supplier_product_obj and supplier_product_obj.is_primary_supplier:
                 supplier_id = supplier_product_obj.supplier_id
                 supplier_part_number = supplier_product_obj.supplier_part_number
@@ -395,7 +422,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         # Calculate profit margin
         profit_margin = None
         if cost and cost > 0:
-            profit_margin = ((inventory_item_obj.price - cost) / cost) * 100
+            profit_margin = (1 - (cost / inventory_item_obj.price)) * 100
 
         return EnrichedInventoryItem(
             id=inventory_item_obj.id,
@@ -428,7 +455,11 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         )
 
     def get_enriched_item_by_product_id(self, product_id: UUID) -> Optional[EnrichedInventoryItem]:
-        """Get enriched inventory item by product ID."""
+        """Get enriched inventory item by product ID.
+        Args:
+            product_id: Product ID to search for
+        Returns:
+            EnrichedInventoryItem object if found, else None"""
         # Find inventory item for this product
         for inventory_id, inv_product_id in self._inventory_product_index.items():
             if inv_product_id == product_id:
@@ -437,7 +468,12 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         return None
 
     def get_enriched_item_by_name(self, name: str) -> Optional[EnrichedInventoryItem]:
-        """Get enriched inventory item by product name."""
+        """Get enriched inventory item by product name.
+        Args:
+            name: Product name to search for
+        Returns:
+            EnrichedInventoryItem object if found, else None
+        """
         product_id = self._product_name_index.get(name)
         if not product_id:
             return None
@@ -445,7 +481,12 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         return self.get_enriched_item_by_product_id(product_id)
 
     def get_enriched_item_by_sku(self, sku: str) -> Optional[EnrichedInventoryItem]:
-        """Get enriched inventory item by product SKU."""
+        """Get enriched inventory item by product SKU.
+        Args:
+            sku: Product SKU to search for
+        Returns:
+            EnrichedInventoryItem object if found, else None
+        """
         product_id = self._product_sku_index.get(sku)
         if not product_id:
             return None
@@ -453,11 +494,21 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         return self.get_enriched_item_by_product_id(product_id)
 
     def get_enriched_items_by_category(self, category: str) -> List[EnrichedInventoryItem]:
-        """Get enriched inventory items by product category."""
+        """Get enriched inventory items by product category.
+        Args:
+            category: Category name to search for
+        Returns:
+            List of EnrichedInventoryItem objects in the specified category
+        """
         return self.list_enriched_items(category=category)
 
     def get_enriched_items_by_supplier_name(self, supplier_name: str) -> List[EnrichedInventoryItem]:
-        """Get enriched inventoryitems by supplier name."""
+        """Get enriched inventoryitems by supplier name.
+        Args:
+            supplier_name: Supplier name to search for
+        Returns:
+            List of EnrichedInventoryItem objects supplied by the specified supplier
+        """
         return self.list_enriched_items(supplier_name=supplier_name)
 
     def get_low_stock_items(self) -> List[EnrichedInventoryItem]:
@@ -472,7 +523,15 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         supplier_name: Optional[str] = None,
     ) -> List[EnrichedInventoryItem]:
         """List enriched inventory items with optional filters by category, status, reorder status, and supplier name.
-        Warning: May contain large data."""
+        Warning: May contain large data.
+        Args:
+            category: Optional product category to filter by
+            status: Optional inventory item status to filter by
+            needs_reorder: Optional flag to filter items that need reorder
+            supplier_name: Optional supplier name to filter by
+        Returns:
+            List of EnrichedInventoryItem objects filtered by the specified criteria and sorted by product name
+        """
         items = []
 
         for inventory_id, inventory_item_obj in self._inventory_items.items():
@@ -500,7 +559,12 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         return sorted(items, key=lambda x: x.name)
 
     def search_enriched_items(self, query: str) -> List[EnrichedInventoryItem]:
-        """Search enriched items by product name, description, or SKU."""
+        """Search enriched items by product name, description, or SKU.
+        Args:
+            query: Search query string to match against product name, description, or SKU
+        Returns:
+            List of EnrichedInventoryItem objects matching the search query and sorted by product name
+        """
         query_lower = query.lower()
         results = []
 
@@ -529,7 +593,8 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
 db = InventoryDatabase()
 
 # Initialize with normalized sample data
-# Create categories first
+
+# Create categories
 categories_data = [
     {"name": "beverages", "description": "Beverages and drinks"},
     {"name": "food", "description": "Food items"},
@@ -545,7 +610,7 @@ for category_data in categories_data:
     db.add_category(category_data["name"], category_data["description"])
     print(f"Added category: {category_data['name']}")
 
-# Create sample suppliers
+# Create suppliers
 suppliers_data = [
     {"id": "SUP-001", "name": "Colombian Coffee Co.", "contact_email": "orders@colombiancoffee.com"},
     {"id": "SUP-002", "name": "Tea Imports Ltd.", "contact_email": "sales@teaimports.com"},
@@ -560,7 +625,7 @@ for supplier in suppliers:
     db.add_supplier(supplier)
     print(f"Added supplier: {supplier.id} - {supplier.name}")
 
-# Create sample products
+# Create products
 products_data = [
     {
         "name": "Premium Coffee Beans",
