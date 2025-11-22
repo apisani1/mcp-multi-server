@@ -86,7 +86,7 @@ mcp = FastMCP("Inventory Tool Server")
 
 @mcp.tool(name="inventory_overview")
 def get_inventory_overview_tool() -> InventoryOverview:
-    """Get an overview of the inventor, including:
+    """Get an overview of the inventory, including:
     - total inventory items
     - total inventory value
     - items with low level of stock
@@ -98,20 +98,20 @@ def get_inventory_overview_tool() -> InventoryOverview:
 
 @mcp.tool(name="database_schema")
 def get_database_schema_tool() -> DatabaseSchema:
-    """Get the database schema definition."""
+    """Get the complete database schema definition."""
     return get_database_schema()
 
 
 @mcp.tool(name="list_categories")
 def list_categories_tool() -> List[Dict[str, str]]:
-    """List all product categories in the inventory."""
+    """Get the list of all valid product categories with names and descriptions.."""
     return list_categories()
 
 
 @mcp.tool(name="category_statistics")
 def get_category_statistics_tool(category: str) -> CategoryStatistics:
     """Get category statistics, including:
-    - total category items
+    - total category items in inventory
     - total category value in inventory
     - category items with low level of stock
     - items per products in the category
@@ -122,49 +122,60 @@ def get_category_statistics_tool(category: str) -> CategoryStatistics:
 
 @mcp.tool(name="products_by_category")
 def get_products_by_category_tool(category: str) -> Union[List[Product], str]:
-    """Get products by category."""
+    """Get the list of all products in the specified category with full details."""
     return get_products_by_category(category)
 
 
 @mcp.tool(name="items_by_category")
 def get_items_by_category_tool(category: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Get inventory items by category."""
+    """Get the list of all inventory items in the specified category with full details."""
     return get_items_by_category(category)
 
 
 @mcp.tool(name="list_suppliers")
 def list_suppliers_tool() -> List[Supplier]:
-    """List all suppliers of items in the inventory."""
+    """Get the list of all valid suppliers with names and full descriptions."""
     return list_suppliers()
 
 
 @mcp.tool(name="products_by_supplier")
 def get_products_by_supplier_tool(supplier_name: str) -> Union[List[Product], str]:
-    """Get products by supplier."""
+    """Get the list of all products for a specific supplier with full details."""
     return get_products_by_supplier(supplier_name)
 
 
 @mcp.tool(name="items_by_supplier")
 def get_items_by_supplier_tool(supplier_name: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Get inventory items by supplier."""
+    """Get the list of all inventory items for a specific supplier with full details."""
     return get_items_by_supplier(supplier_name)
 
 
 @mcp.tool(name="list_products")
-def list_products_tool() -> List[Dict[str, str]]:
-    """List all products in the inventory."""
+def list_products_tool() -> List[Product]:
+    """Get the list of all valid products with full details."""
     return list_products()
 
 
 @mcp.tool(name="items_by_name")
 def get_items_by_name_tool(product_name: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Get inventory items by product name."""
+    """Find inventory items by exact product name.
+    Supports Many-to-One relationship: returns all inventory items for a product
+    (e.g., same product tracked at different locations).
+    Parameter: product_name (string) - Exact product name (case-sensitive).
+    Note: Names with spaces should be URL-encoded (e.g., %20 for spaces).
+    Use list_products tool to get valid product names.
+    Returns: List of inventory items if name matches exactly, or error message if not found.
+    """
     return get_items_by_name(product_name)
 
 
 @mcp.tool(name="search_inventory")
 def search_inventory_tool(query: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Search inventory by keyword."""
+    """Search inventory by keyword in product name, description, or SKU. Not case-sensitive.
+    Note: Queries with spaces should be URL-encoded (e.g., %20 for spaces).
+    Parameter: query (string) - Keyword to search for in inventory.
+    Returns: List of matching items, sorted by name.
+    """
     return search_inventory(query)
 
 
@@ -174,121 +185,10 @@ def get_low_stock_items_tool() -> Union[List[EnrichedInventoryItem], str]:
     return get_low_stock_items()
 
 
-# class Person(BaseModel):
-#     first_name: str = Field(..., description="The person's first name")
-#     last_name: str = Field(..., description="The person's last name")
-#     years_of_experience: int = Field(..., description="Number of years of experience")
-#     addresses: List[str] = Field(default_factory=list, description="List of previous addresses")
-
-
-# # TypedDict for structured output without using Pydantic
-# class LocationInfo(TypedDict):
-#     full_name: str
-#     addresses: list[str]
-
-
-# class MemberDatabase(BaseModel):
-#     members: dict[str, Person] = Field(default_factory=dict, description="In-memory database of members")
-#     next_id: int = Field(default=1, description="Next sequential ID to assign")
-
-#     def add_member(self, person: Person) -> str:
-#         """Add a person to the database with auto-generated sequential ID."""
-#         member_id = str(self.next_id)
-#         self.members[member_id] = person
-#         self.next_id += 1
-#         return member_id
-
-#     def add_member_with_id(self, member_id: str, person: Person) -> str:
-#         """Add a person to the database with specific ID (legacy method)."""
-#         self.members[member_id] = person
-#         return f"Added member {member_id} to database"
-
-#     def get_member(self, member_id: str) -> Person | None:
-#         """Retrieve a person from the database."""
-#         return self.members.get(member_id)  # pylint: disable=no-member
-
-#     def get_member_id(self, first_name: str, last_name: str) -> Optional[str]:
-#         """Get member ID by first and last name."""
-#         for member_id, person in self.members.items():  # pylint: disable=no-member
-#             if person.first_name == first_name and person.last_name == last_name:
-#                 return member_id
-#         return None
-
-#     def list_members(self) -> list[str]:
-#         """List all member IDs in the database."""
-#         return list(self.members.keys())  # pylint: disable=no-member
-
-#     def remove_member(self, member_id: str) -> str:
-#         """Remove a person from the database."""
-#         if member_id in self.members:
-#             del self.members[member_id]
-#             return f"Removed member {member_id} from database"
-#         return f"Member {member_id} not found"
-
-
-# member_db = MemberDatabase()
-
-# # Populate with 5 test records
-# test_people = [
-#     Person(
-#         first_name="Alice",
-#         last_name="Johnson",
-#         years_of_experience=5,
-#         addresses=["123 Main St, Springfield", "456 Oak Ave, Portland"],
-#     ),
-#     Person(first_name="Bob", last_name="Smith", years_of_experience=10, addresses=["789 Pine Rd, Seattle"]),
-#     Person(
-#         first_name="Carol",
-#         last_name="Davis",
-#         years_of_experience=3,
-#         addresses=["321 Elm St, Denver", "654 Maple Dr, Boulder", "987 Cedar Ln, Fort Collins"],
-#     ),
-#     Person(first_name="David", last_name="Wilson", years_of_experience=8, addresses=["147 Birch Way, Austin"]),
-#     Person(
-#         first_name="Emma",
-#         last_name="Brown",
-#         years_of_experience=12,
-#         addresses=["258 Willow Ct, Miami", "369 Spruce St, Tampa"],
-#     ),
-# ]
-
-# for test_person in test_people:
-#     member_db.add_member(test_person)
-
-
-# @mcp.tool(name="add_person")
-# def add_person_to_member_database(person: Person) -> Dict[str, Person]:
-#     """Logs personal details to the member database."""
-#     member_id = member_db.add_member(person)
-#     return {member_id: person}
-
-
-# @mcp.tool(name="list_persons")
-# def list_member_database_items() -> Dict[str, Dict[str, str]]:
-#     """List all members in the database."""
-#     return {k: {"first_name": v.first_name, "last_name": v.last_name} for k, v in member_db.members.items()}
-
-
-# @mcp.tool(name="get_person")
-# def get_person_from_member_database(member_id: str) -> Optional[Person]:
-#     """Get a person from the member database by ID."""
-#     return member_db.get_member(member_id)
-
-
-# @mcp.tool(name="add_new_address")
-# def add_address_info(member_first_name: str, member_last_name: str, new_address: str) -> LocationInfo:
-#     """Add new addresss to a database member."""
-#     member_id = member_db.get_member_id(member_first_name, member_last_name)
-#     if not member_id:
-#         return LocationInfo(full_name="Person not found", addresses=[])
-#     person = member_db.get_member(member_id)
-#     if not person:
-#         return LocationInfo(full_name="Person not found", addresses=[])
-#     person.addresses.append(new_address)
-#     return LocationInfo(full_name=f"{person.first_name} {person.last_name}", addresses=person.addresses)
-
-
-# Tools returning other types from media_handler for demonstration
+# Tools returning other types from media_handler for demonstration purposes
+# Currently OpenAI function calling only supports text-based outputs and the
+# chat client example will just display the media content from the tool call
+# and send a text message acknowledging the media received.
 
 
 @mcp.tool(name="get_image")

@@ -22,6 +22,10 @@ if TYPE_CHECKING:
 def print_capabilities_summary(client: "MultiServerClient") -> None:
     """Utility function to print a summary of all discovered capabilities in a MultiServerClient object."""
 
+    def first_line_preview(text: str = "") -> str:
+        first_line = text.splitlines()[0] if text else ""
+        return first_line[:80]
+
     print("\n" + "=" * 80)
     print("CAPABILITIES SUMMARY")
     print("=" * 80)
@@ -32,22 +36,22 @@ def print_capabilities_summary(client: "MultiServerClient") -> None:
         if caps.tools and caps.tools.tools:
             print(f"  Tools ({len(caps.tools.tools)}):")
             for i, tool in enumerate(caps.tools.tools):
-                print(f"    - {i + 1}) {tool.name}: {tool.description}")
+                print(first_line_preview(f"    - {i + 1}) {tool.name}: {tool.description}"))
 
         if caps.resources and caps.resources.resources:
             print(f"  Resources ({len(caps.resources.resources)}):")
             for i, resource in enumerate(caps.resources.resources):
-                print(f"    - {i + 1}) {resource.name}: {resource.uri}")
+                print(first_line_preview(f"    {i + 1}) {resource.name}: {resource.uri}"))
 
         if caps.resource_templates and caps.resource_templates.resourceTemplates:
             print(f"  Resource Templates ({len(caps.resource_templates.resourceTemplates)}):")
             for i, template in enumerate(caps.resource_templates.resourceTemplates):
-                print(f"    - {i + 1}) {template.name}: {template.uriTemplate}")
+                print(first_line_preview(f"    {i + 1}) {template.name}: {template.uriTemplate}"))
 
         if caps.prompts and caps.prompts.prompts:
             print(f"  Prompts ({len(caps.prompts.prompts)}):")
             for i, prompt in enumerate(caps.prompts.prompts):
-                print(f"    - {i + 1}) {prompt.name}: {prompt.description}")
+                print(first_line_preview(f"    {i + 1}) {prompt.name}: {prompt.description}"))
 
     print("\n" + "=" * 80 + "\n")
 

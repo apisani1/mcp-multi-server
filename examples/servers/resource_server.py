@@ -292,7 +292,7 @@ def get_items_by_supplier(supplier_name: str) -> Union[List[EnrichedInventoryIte
 
 @mcp.resource("inventory://products")
 def list_products() -> List[Product]:
-    """Returns list of all products in the inventory."""
+    """Returns list of all products defined."""
     return db.list_products()
 
 
