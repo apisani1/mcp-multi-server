@@ -1,6 +1,7 @@
 """Example showing structured input and output with tools."""
 
 import logging
+from datetime import datetime
 from decimal import Decimal
 from typing import (  # Optional,; TypedDict,
     Dict,
@@ -132,7 +133,7 @@ def add_supplier_tool(
     Parameters:
         supplier_id (str): Unique supplier identifier (required, max 50 chars)
         name (str): Supplier name (required, 1-100 chars)
-        contact_email (str): Contact email address (optional, max 100 chars)``
+        contact_email (str): Contact email address (optional, max 100 chars)
         contact_phone (str): Contact phone number (optional, max 20 chars)
         address (str): Supplier physical address (optional, max 200 chars)
 
@@ -424,6 +425,277 @@ def search_inventory_tool(query: str) -> Union[List[EnrichedInventoryItem], str]
 def get_low_stock_items_tool() -> Union[List[EnrichedInventoryItem], str]:
     """Get low stock inventory items."""
     return get_low_stock_items()
+
+
+# ==============================================================================
+# UPDATE Tools - Data Modification Operations
+# ==============================================================================
+
+
+@mcp.tool(name="update_category")
+def update_category_tool(name: str, description: str = "") -> Dict[str, str]:
+    """Update an existing product category's description.
+
+    The category name cannot be changed as it serves as the primary key.
+    Only the description field can be updated. Names are case-insensitive.
+
+    Parameters:
+        name (str): Category name to update (required, case-insensitive)
+        description (str): New category description (optional, defaults to empty string)
+
+    Returns:
+        Dict with 'name' and 'description' keys confirming the updated category
+
+    Raises:
+        ValueError if category does not exist
+
+    Example:
+        update_category("electronics", "Electronic devices and computer accessories")
+
+    Note:
+        - Use list_categories tool to see existing categories before updating
+        - Empty description will clear the category description
+        - Category names are stored in lowercase
+    """
+    return db.update_category(name, description if description else None)
+
+
+@mcp.tool(name="update_supplier")
+def update_supplier_tool(
+    supplier_id: str,
+    name: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    contact_phone: Optional[str] = None,
+    address: Optional[str] = None,
+) -> Supplier:
+    """Update an existing supplier's information.
+
+    Only provided fields will be updated. Fields not provided will retain their current values.
+    The supplier_id cannot be changed. The updated_at timestamp is automatically updated.
+
+    Parameters:
+        supplier_id (str): Supplier ID to update (required, max 50 chars)
+        name (str): New supplier name (optional, 1-100 chars)
+        contact_email (str): New contact email (optional, max 100 chars)
+        contact_phone (str): New contact phone (optional, max 20 chars)
+        address (str): New supplier address (optional, max 200 chars)
+
+    Returns:
+        Supplier object with updated fields and auto-updated timestamp
+
+    Raises:
+        ValueError if supplier_id does not exist
+
+    Example:
+        update_supplier("SUP001", name="Acme Corporation Ltd", contact_email="new@acme.com")
+
+    Note:
+        - Use list_suppliers tool to see existing suppliers and their IDs
+        - Only provided parameters are updated (partial updates supported)
+        - The updated_at field is automatically set to current timestamp
+        - Supplier ID cannot be changed (it's the primary key)
+    """
+    return db.update_supplier(
+        supplier_id=supplier_id,
+        name=name,
+        contact_email=contact_email,
+        contact_phone=contact_phone,
+        address=address,
+    )
+
+
+@mcp.tool(name="update_product")
+def update_product_tool(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    product_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    category: Optional[str] = None,
+    sku: Optional[str] = None,
+    barcode: Optional[str] = None,
+    weight: float = -1.0,
+    dimensions: Optional[str] = None,
+) -> Product:
+    """Update an existing product's information.
+
+    Only provided fields will be updated. Fields not provided will retain their current values.
+    The product_id cannot be changed. The updated_at timestamp is automatically updated.
+    This method handles complex index updates when name, SKU, or category changes.
+
+    Parameters:
+        product_id (str): Product UUID to update (required)
+        name (str): New product name (optional, must be unique case-insensitive, 1-100 chars)
+        description (str): New product description (optional, max 500 chars)
+        category (str): New product category (optional, must exist in database)
+        sku (str): New SKU code (optional, must be unique if provided, max 50 chars)
+        barcode (str): New barcode (optional, max 50 chars)
+        weight (float): New weight in kilograms (optional, must be > 0 if provided)
+        dimensions (str): New dimensions as LxWxH string (optional, max 50 chars)
+
+    Returns:
+        Product object with updated fields and auto-updated timestamp
+
+    Raises:
+        ValueError if product does not exist, category doesn't exist, name exists, or SKU exists
+
+    Example:
+        update_product("550e8400-e29b-41d4-a716-446655440000",
+                      name="Laptop Pro 16", category="electronics",
+                      weight=2.8, sku="LAP-002")
+
+    Note:
+        - Use list_products tool to get valid product IDs and current values
+        - Use list_categories tool to see valid category names
+        - Product UUIDs are shown in list_products output (id field)
+        - Only provided parameters are updated (partial updates supported)
+        - The updated_at field is automatically set to current timestamp
+        - Set weight to -1 or omit to leave unchanged; positive values update the weight
+        - Product ID cannot be changed (it's the primary key)
+    """
+    return db.update_product(
+        product_id=UUID(product_id),
+        name=name,
+        description=description,
+        category=category,
+        sku=sku,
+        barcode=barcode,
+        weight=Decimal(str(weight)) if weight > 0 else None,
+        dimensions=dimensions,
+    )
+
+
+@mcp.tool(name="update_supplier_product")
+def update_supplier_product_tool(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    supplier_product_id: str,
+    supplier_part_number: Optional[str] = None,
+    cost: float = -1.0,
+    lead_time_days: int = -1,
+    minimum_order_quantity: int = 0,
+    is_primary_supplier: Optional[bool] = None,
+) -> SupplierProduct:
+    """Update an existing supplier-product relationship.
+
+    Only provided fields will be updated. Fields not provided will retain their current values.
+    The relationship IDs (product_id, supplier_id) cannot be changed as they define the
+    relationship. The updated_at timestamp is automatically updated.
+
+    Parameters:
+        supplier_product_id (str): SupplierProduct UUID to update (required)
+        supplier_part_number (str): New supplier part number (optional, max 50 chars)
+        cost (float): New supplier cost (optional, must be >= 0)
+        lead_time_days (int): New lead time in days (optional, must be >= 0)
+        minimum_order_quantity (int): New minimum order quantity (optional, must be >= 1)
+        is_primary_supplier (bool): New primary supplier flag (optional)
+
+    Returns:
+        SupplierProduct object with updated fields and auto-updated timestamp
+
+    Raises:
+        ValueError if supplier-product relationship does not exist or constraints violated
+
+    Example:
+        update_supplier_product("650e8400-e29b-41d4-a716-446655440000",
+                               cost=925.50, lead_time_days=5,
+                               is_primary_supplier=True)
+
+    Note:
+        - Supplier-product relationship UUIDs are shown when creating relationships
+        - Only provided parameters are updated (partial updates supported)
+        - The updated_at field is automatically set to current timestamp
+        - The product_id and supplier_id are immutable (they define the relationship)
+        - Set cost to -1 or omit to leave unchanged; values >= 0 update the cost
+        - Set lead_time_days to -1 or omit to leave unchanged; values >= 0 update lead time
+        - Set minimum_order_quantity to 0 or omit to leave unchanged; values >= 1 update MOQ
+    """
+    return db.update_supplier_product(
+        supplier_product_id=UUID(supplier_product_id),
+        supplier_part_number=supplier_part_number,
+        cost=Decimal(str(cost)) if cost >= 0 else None,
+        lead_time_days=lead_time_days if lead_time_days >= 0 else None,
+        minimum_order_quantity=minimum_order_quantity if minimum_order_quantity >= 1 else None,
+        is_primary_supplier=is_primary_supplier,
+    )
+
+
+@mcp.tool(name="update_inventory_item")
+def update_inventory_item_tool(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    inventory_item_id: str,
+    location_id: Optional[str] = None,
+    status: Optional[str] = None,
+    price: float = -1.0,
+    quantity_on_hand: int = -1,
+    quantity_reserved: int = -1,
+    quantity_allocated: int = -1,
+    reorder_point: int = -1,
+    max_stock: int = -1,
+    last_restocked_at: Optional[str] = None,
+    last_counted_at: Optional[str] = None,
+) -> InventoryItem:
+    """Update an existing inventory item's information.
+
+    Only provided fields will be updated. Fields not provided will retain their current values.
+    The inventory_item_id and product_id cannot be changed. The updated_at timestamp is
+    automatically updated. Supports Many-to-One: multiple items can track the same product.
+
+    Parameters:
+        inventory_item_id (str): InventoryItem UUID to update (required)
+        location_id (str): New storage location identifier (optional, max 50 chars)
+        status (str): New inventory status (optional, one of: 'active', 'inactive',
+                     'out_of_stock', 'discontinued')
+        price (float): New selling price (optional, must be > 0)
+        quantity_on_hand (int): New current stock quantity (optional, must be >= 0)
+        quantity_reserved (int): New reserved quantity (optional, must be >= 0)
+        quantity_allocated (int): New allocated quantity (optional, must be >= 0)
+        reorder_point (int): New reorder threshold (optional, must be >= 0)
+        max_stock (int): New maximum stock level (optional, must be > 0)
+        last_restocked_at (str): New last restock timestamp in ISO format (optional,
+                                e.g., "2024-01-15T10:30:00")
+        last_counted_at (str): New last count timestamp in ISO format (optional,
+                              e.g., "2024-01-15T14:45:00")
+
+    Returns:
+        InventoryItem object with updated fields and auto-updated timestamp
+
+    Raises:
+        ValueError if inventory item does not exist or field constraints violated
+
+    Example:
+        update_inventory_item("750e8400-e29b-41d4-a716-446655440000",
+                             quantity_on_hand=150, status="active",
+                             last_restocked_at="2024-01-15T10:30:00")
+
+    Note:
+        - Use search_inventory or items_by_name tools to get valid inventory item IDs
+        - Inventory item UUIDs are shown in search results (id field)
+        - Only provided parameters are updated (partial updates supported)
+        - The updated_at field is automatically set to current timestamp
+        - The product_id is immutable (defines which product is tracked)
+        - Valid status values: 'active', 'inactive', 'out_of_stock', 'discontinued'
+        - Set numeric values to -1 or omit to leave unchanged; valid values update the field
+        - Timestamps should be in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)
+        - This supports Many-to-One: multiple items can track same product at different locations
+    """
+    # Parse datetime strings if provided
+    restocked_dt = None
+    if last_restocked_at is not None:
+        restocked_dt = datetime.fromisoformat(last_restocked_at)
+
+    counted_dt = None
+    if last_counted_at is not None:
+        counted_dt = datetime.fromisoformat(last_counted_at)
+
+    return db.update_inventory_item(
+        inventory_item_id=UUID(inventory_item_id),
+        location_id=location_id,
+        status=ItemStatus(status) if status else None,
+        price=Decimal(str(price)) if price > 0 else None,
+        quantity_on_hand=quantity_on_hand if quantity_on_hand >= 0 else None,
+        quantity_reserved=quantity_reserved if quantity_reserved >= 0 else None,
+        quantity_allocated=quantity_allocated if quantity_allocated >= 0 else None,
+        reorder_point=reorder_point if reorder_point >= 0 else None,
+        max_stock=max_stock if max_stock > 0 else None,
+        last_restocked_at=restocked_dt,
+        last_counted_at=counted_dt,
+    )
 
 
 # Tools returning other types from media_handler for demonstration purposes
