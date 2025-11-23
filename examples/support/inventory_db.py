@@ -336,20 +336,16 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         category_lower = category.lower()
         if category_lower not in self._categories:
             return []
-        product_list = []
-        for product_id in self._category_index.get(category_lower, []):
-            product_obj = self._products.get(product_id)
-            if product_obj:
-                product_list.append(product_obj)
-        return sorted(product_list, key=lambda x: x.name)
+        return sorted(
+            [self._products[product_id] for product_id in self._category_index.get(category_lower, [])],
+            key=lambda x: x.name,
+        )
 
     def get_category_stats(self) -> Dict[str, int]:
         """Get item count by category."""
         stats: Dict[str, int] = {}
         for inventory_id in self._inventory_items:
-            product_obj = self._products.get(self._inventory_product_index[inventory_id])
-            if not product_obj:
-                continue
+            product_obj = self._products[self._inventory_product_index[inventory_id]]
             category_name = product_obj.category.lower()
             stats[category_name] = stats.get(category_name, 0) + 1
         return stats
@@ -393,14 +389,10 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         items = []
         for product_id, supplier_product_obj_ids in self._supplier_product_index.items():
             for supplier_product_obj_id in supplier_product_obj_ids:
-                supplier_product_obj = self._supplier_products.get(supplier_product_obj_id)
-                if not supplier_product_obj:
-                    continue
-                if supplier_product_obj.supplier_id != supplier_obj.id:
-                    continue
-                product_obj = self._products.get(product_id)
-                if product_obj:
-                    items.append(product_obj)
+                supplier_product_obj = self._supplier_products[supplier_product_obj_id]
+                if supplier_product_obj.supplier_id == supplier_obj.id:
+                    items.append(self._products[product_id])
+                    break
         return sorted(items, key=lambda x: x.name)
 
     def list_products(self) -> List[Product]:
@@ -621,16 +613,13 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
 
     def get_product_stats(self, category: str) -> Dict[str, int]:
         """Get item count by product within a specific category."""
-        if category.lower() not in self._categories:
-            return {}
         category_lower = category.lower()
         stats: Dict[str, int] = {}
         for inventory_id in self._inventory_items:
-            product_obj = self._products.get(self._inventory_product_index[inventory_id])
-            if not product_obj or category_lower not in product_obj.category.lower():
-                continue
-            product_name = product_obj.name
-            stats[product_name] = stats.get(product_name, 0) + 1
+            product_obj = self._products[self._inventory_product_index[inventory_id]]
+            if category_lower in product_obj.category.lower():
+                product_name = product_obj.name
+                stats[product_name] = stats.get(product_name, 0) + 1
         return stats
 
     def get_inventory_value(self, category: Optional[str] = None) -> Decimal:
