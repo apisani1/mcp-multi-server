@@ -395,6 +395,31 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
                     break
         return sorted(items, key=lambda x: x.name)
 
+    def get_supplier_products_by_supplier_id(self, supplier_id: str) -> List[SupplierProduct]:
+        """Get all supplier-product relationships for a specific supplier.
+        Args:
+            supplier_id: Supplier ID to search for
+        Returns:
+            List of SupplierProduct objects for the specified supplier (empty if none found)
+        """
+        return [
+            supplier_product
+            for supplier_product in self._supplier_products.values()
+            if supplier_product.supplier_id == supplier_id
+        ]
+
+    def get_supplier_products_by_product_id(self, product_id: UUID) -> List[SupplierProduct]:
+        """Get all supplier-product relationships for a specific product.
+        Args:
+            product_id: Product UUID to search for
+        Returns:
+            List of SupplierProduct objects for the specified product (empty if none found)
+        """
+        return [
+            self._supplier_products[supplier_product_id]
+            for supplier_product_id in self._supplier_product_index.get(product_id, [])
+        ]
+
     def list_products(self) -> List[Product]:
         """List all products in the inventory."""
         return sorted(self._products.values(), key=lambda x: x.name)

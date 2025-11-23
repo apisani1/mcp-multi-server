@@ -392,6 +392,36 @@ def get_items_by_supplier_tool(supplier_name: str) -> Union[List[EnrichedInvento
     return get_items_by_supplier(supplier_name)
 
 
+@mcp.tool(name="supplier_products_by_supplier")
+def get_supplier_products_by_supplier_tool(supplier_id: str) -> List[SupplierProduct]:
+    """Get all supplier-product relationships for a specific supplier ID.
+
+    Returns detailed information about all products supplied by this supplier,
+    including costs, lead times, and primary supplier status.
+
+    Parameter: supplier_id (string) - Supplier ID (e.g., "SUP-001")
+    Use list_suppliers tool to get valid supplier IDs.
+
+    Returns: List of supplier-product relationship objects
+    """
+    return db.get_supplier_products_by_supplier_id(supplier_id)
+
+
+@mcp.tool(name="supplier_products_by_product")
+def get_supplier_products_by_product_tool(product_id: str) -> List[SupplierProduct]:
+    """Get all supplier-product relationships for a specific product ID.
+
+    Returns detailed information about all suppliers for this product,
+    including costs, lead times, and which is the primary supplier.
+
+    Parameter: product_id (string) - Product UUID
+    Use list_products tool to get valid product IDs.
+
+    Returns: List of supplier-product relationship objects
+    """
+    return db.get_supplier_products_by_product_id(UUID(product_id))
+
+
 @mcp.tool(name="list_products")
 def list_products_tool() -> List[Product]:
     """Get the list of all valid products with full details."""
@@ -594,9 +624,10 @@ def update_supplier_product_tool(  # pylint: disable=too-many-arguments,too-many
                                is_primary_supplier=True)
 
     Notes:
-        - Supplier-product relationship UUIDs are shown when creating relationships
         - Only provided parameters are updated (partial updates supported)
         - The product_id and supplier_id are immutable (they define the relationship)
+        - Use supplier_products_by_supplier or supplier_products_by_product tools
+          to get valid supplier-product relationship IDs
     """
     return db.update_supplier_product(
         supplier_product_id=UUID(supplier_product_id),
