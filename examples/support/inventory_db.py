@@ -2,9 +2,11 @@
 
 # pylint: disable=too-many-lines
 
+import pickle
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -211,20 +213,92 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         referential integrity across related entities.
     """
 
-    def __init__(self) -> None:
-        # Core entities
-        self._categories: Dict[str, Dict[str, str]] = {}  # category_name -> {name, description}
-        self._suppliers: Dict[str, Supplier] = {}  # supplier_id -> Supplier
-        self._products: Dict[UUID, Product] = {}  # product_id -> Product
-        self._supplier_products: Dict[UUID, SupplierProduct] = {}  # supplier_product_id -> SupplierProduct
-        self._inventory_items: Dict[UUID, InventoryItem] = {}  # inventory_id -> InventoryItem
+    def __init__(self, database_file: Optional[str] = "sample_db.pkl") -> None:
+        """Initialize inventory database with optional file persistence.
 
-        # Indexes for fast lookups
-        self._product_name_index: Dict[str, UUID] = {}  # product_name -> product_id
-        self._product_sku_index: Dict[str, UUID] = {}  # sku -> product_id
-        self._category_index: Dict[str, List[UUID]] = {}  # category_name -> product_ids
-        self._supplier_product_index: Dict[UUID, List[UUID]] = {}  # product_id -> supplier_product ids
-        self._inventory_product_index: Dict[UUID, UUID] = {}  # inventory_id -> product_id
+        Args:
+            database_file: Path to pickle file for persistence. If file exists, database
+                          will be loaded from it. If None, no persistence is used.
+                          Defaults to "sample_db.pkl".
+        """
+        self._database_file = database_file
+
+        # Try to load from file if it exists
+        if database_file is not None and Path(database_file).exists():
+            self._load_from_file(database_file)
+        else:
+            # Initialize empty database
+            # Core entities
+            self._categories: Dict[str, Dict[str, str]] = {}  # category_name -> {name, description}
+            self._suppliers: Dict[str, Supplier] = {}  # supplier_id -> Supplier
+            self._products: Dict[UUID, Product] = {}  # product_id -> Product
+            self._supplier_products: Dict[UUID, SupplierProduct] = {}  # supplier_product_id -> SupplierProduct
+            self._inventory_items: Dict[UUID, InventoryItem] = {}  # inventory_id -> InventoryItem
+
+            # Indexes for fast lookups
+            self._product_name_index: Dict[str, UUID] = {}  # product_name -> product_id
+            self._product_sku_index: Dict[str, UUID] = {}  # sku -> product_id
+            self._category_index: Dict[str, List[UUID]] = {}  # category_name -> product_ids
+            self._supplier_product_index: Dict[UUID, List[UUID]] = {}  # product_id -> supplier_product ids
+            self._inventory_product_index: Dict[UUID, UUID] = {}  # inventory_id -> product_id
+
+    def _load_from_file(self, filepath: str) -> None:
+        """Load database state from pickle file.
+
+        Args:
+            filepath: Path to the pickle file to load from
+
+        Raises:
+            Exception: If loading fails (propagates pickle exceptions)
+        """
+        with open(filepath, "rb") as f:
+            state = pickle.load(f)
+
+        # Restore all attributes from saved state
+        self._categories = state["categories"]
+        self._suppliers = state["suppliers"]
+        self._products = state["products"]
+        self._supplier_products = state["supplier_products"]
+        self._inventory_items = state["inventory_items"]
+        self._product_name_index = state["product_name_index"]
+        self._product_sku_index = state["product_sku_index"]
+        self._category_index = state["category_index"]
+        self._supplier_product_index = state["supplier_product_index"]
+        self._inventory_product_index = state["inventory_product_index"]
+
+    def _save_to_file(self, filepath: str) -> None:
+        """Save database state to pickle file.
+
+        Args:
+            filepath: Path to the pickle file to save to
+
+        Raises:
+            Exception: If saving fails (propagates pickle exceptions)
+        """
+        state = {
+            "categories": self._categories,
+            "suppliers": self._suppliers,
+            "products": self._products,
+            "supplier_products": self._supplier_products,
+            "inventory_items": self._inventory_items,
+            "product_name_index": self._product_name_index,
+            "product_sku_index": self._product_sku_index,
+            "category_index": self._category_index,
+            "supplier_product_index": self._supplier_product_index,
+            "inventory_product_index": self._inventory_product_index,
+        }
+
+        with open(filepath, "wb") as f:
+            pickle.dump(state, f)
+
+    def __del__(self) -> None:
+        """Save database to file on cleanup."""
+        if hasattr(self, "_database_file") and self._database_file is not None:
+            try:
+                self._save_to_file(self._database_file)
+            except Exception:
+                # Fail silently in destructor to avoid issues during cleanup
+                pass
 
     # ==============================================================================
     # CREATE Methods - Data Insertion Operations
@@ -1267,141 +1341,6 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         return deleted_counts
 
 
-# Initialize the sample database
+# Module-level database instance
+# Will load from 'sample_db.pkl' if it exists, otherwise starts empty
 db = InventoryDatabase()
-
-# Create categories
-categories_data = [
-    {"name": "beverages", "description": "Beverages and drinks"},
-    {"name": "food", "description": "Food items"},
-    {"name": "electronics", "description": "Electronic devices and accessories"},
-    {"name": "books", "description": "Books and publications"},
-    {"name": "clothing", "description": "Clothing and apparel"},
-    {"name": "home_garden", "description": "Home and garden supplies"},
-    {"name": "office_supplies", "description": "Office supplies and stationery"},
-    {"name": "other", "description": "Other miscellaneous items"},
-]
-
-for category_data in categories_data:
-    db.add_category(category_data["name"], category_data["description"])
-    print(f"Added category: {category_data['name']}")
-
-# Create suppliers
-suppliers_data = [
-    {"id": "SUP-001", "name": "Colombian Coffee Co.", "contact_email": "orders@colombiancoffee.com"},
-    {"id": "SUP-002", "name": "Tea Imports Ltd.", "contact_email": "sales@teaimports.com"},
-    {"id": "SUP-003", "name": "Local Bakery", "contact_phone": "555-0123"},
-    {"id": "SUP-004", "name": "TechSupply Inc.", "contact_email": "wholesale@techsupply.com"},
-    {"id": "SUP-005", "name": "Academic Publishers", "contact_email": "orders@academicpub.com"},
-]
-
-suppliers = [Supplier.model_validate(data) for data in suppliers_data]
-
-for supplier in suppliers:
-    db.add_supplier(supplier)
-    print(f"Added supplier: {supplier.id} - {supplier.name}")
-
-# Create products
-products_data = [
-    {
-        "name": "Premium Coffee Beans",
-        "description": "High-quality Arabica coffee beans from Colombia",
-        "category": "beverages",
-        "sku": "COF-001",
-        "weight": Decimal("1.0"),
-    },
-    {
-        "name": "Earl Grey Tea",
-        "description": "Classic Earl Grey black tea with bergamot",
-        "category": "beverages",
-        "sku": "TEA-001",
-    },
-    {
-        "name": "Chocolate Chip Cookies",
-        "description": "Fresh baked chocolate chip cookies",
-        "category": "food",
-        "sku": "COOK-001",
-    },
-    {
-        "name": "Wireless Bluetooth Headphones",
-        "description": "High-quality wireless headphones with noise cancellation",
-        "category": "electronics",
-        "sku": "ELEC-001",
-        "weight": Decimal("0.3"),
-    },
-    {
-        "name": "Python Programming Guide",
-        "description": "Comprehensive guide to Python programming",
-        "category": "books",
-        "sku": "BOOK-001",
-    },
-]
-
-products = [Product.model_validate(data) for data in products_data]
-
-for product in products:
-    db.add_product(product)
-    print(f"Added product: {product.id} - {product.name}")
-
-# Create supplier-product relationships
-supplier_products_data = [
-    {
-        "product_id": products[0].id,
-        "supplier_id": "SUP-001",
-        "cost": Decimal("6.50"),
-        "is_primary_supplier": True,
-        "lead_time_days": 14,
-        "minimum_order_quantity": 50,
-    },
-    {
-        "product_id": products[1].id,
-        "supplier_id": "SUP-002",
-        "cost": Decimal("4.25"),
-        "is_primary_supplier": True,
-        "lead_time_days": 7,
-        "minimum_order_quantity": 25,
-    },
-    {
-        "product_id": products[2].id,
-        "supplier_id": "SUP-003",
-        "cost": Decimal("2.50"),
-        "is_primary_supplier": True,
-        "lead_time_days": 1,
-        "minimum_order_quantity": 12,
-    },
-    {
-        "product_id": products[3].id,
-        "supplier_id": "SUP-004",
-        "cost": Decimal("120.00"),
-        "is_primary_supplier": True,
-        "lead_time_days": 21,
-        "minimum_order_quantity": 5,
-    },
-    {
-        "product_id": products[4].id,
-        "supplier_id": "SUP-005",
-        "cost": Decimal("25.00"),
-        "is_primary_supplier": True,
-        "lead_time_days": 10,
-        "minimum_order_quantity": 10,
-    },
-]
-
-supplier_products = [SupplierProduct.model_validate(data) for data in supplier_products_data]
-
-for supplier_product in supplier_products:
-    db.add_supplier_product(supplier_product)
-
-# Create inventory items
-inventory_items_data = [
-    {"product_id": products[0].id, "price": Decimal("12.99"), "quantity_on_hand": 150, "reorder_point": 20},
-    {"product_id": products[1].id, "price": Decimal("8.99"), "quantity_on_hand": 75, "reorder_point": 15},
-    {"product_id": products[2].id, "price": Decimal("5.99"), "quantity_on_hand": 25, "reorder_point": 30},
-    {"product_id": products[3].id, "price": Decimal("199.99"), "quantity_on_hand": 12, "reorder_point": 5},
-    {"product_id": products[4].id, "price": Decimal("39.99"), "quantity_on_hand": 8, "reorder_point": 3},
-]
-
-inventory_items = [InventoryItem.model_validate(data) for data in inventory_items_data]
-
-for inventory_item in inventory_items:
-    db.add_inventory_item(inventory_item)
