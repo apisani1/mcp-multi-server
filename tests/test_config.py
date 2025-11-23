@@ -43,28 +43,28 @@ class TestServerConfig:
     def test_missing_command_raises_validation_error(self) -> None:
         """Test that missing command field raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            ServerConfig(args=["-m", "server"])  # type: ignore
+            ServerConfig(args=["-m", "server"])
 
         assert "command" in str(exc_info.value)
 
     def test_missing_args_raises_validation_error(self) -> None:
         """Test that missing args field raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            ServerConfig(command="python")  # type: ignore
+            ServerConfig(command="python")
 
         assert "args" in str(exc_info.value)
 
     def test_invalid_command_type_raises_validation_error(self) -> None:
         """Test that invalid command type raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            ServerConfig(command=123, args=[])  # type: ignore
+            ServerConfig(command=123, args=[])
 
         assert "command" in str(exc_info.value)
 
     def test_invalid_args_type_raises_validation_error(self) -> None:
         """Test that invalid args type raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            ServerConfig(command="python", args="not-a-list")  # type: ignore
+            ServerConfig(command="python", args="not-a-list")
 
         assert "args" in str(exc_info.value)
 
@@ -140,14 +140,14 @@ class TestMCPServersConfig:
     def test_missing_mcpServers_raises_validation_error(self) -> None:
         """Test that missing mcpServers field raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            MCPServersConfig()  # type: ignore
+            MCPServersConfig()
 
         assert "mcpServers" in str(exc_info.value)
 
     def test_invalid_mcpServers_type_raises_validation_error(self) -> None:
         """Test that invalid mcpServers type raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
-            MCPServersConfig(mcpServers="not-a-dict")  # type: ignore
+            MCPServersConfig(mcpServers="not-a-dict")
 
         assert "mcpServers" in str(exc_info.value)
 

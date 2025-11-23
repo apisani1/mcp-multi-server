@@ -142,7 +142,7 @@ class TestFromDictClassMethod:
         """Test from_dict with invalid schema raises pydantic ValidationError."""
         from pydantic import ValidationError
 
-        invalid_dict = {"wrong_field": {}}
+        invalid_dict: Dict[str, Any] = {"wrong_field": {}}
 
         with pytest.raises(ValidationError):
             MultiServerClient.from_dict(invalid_dict)
