@@ -196,7 +196,20 @@ class DatabaseSchema(BaseModel):
 
 
 class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
-    """Normalized in-memory inventory database with CRUD operations."""
+    """Normalized in-memory inventory database with CRUD operations.
+
+    This database maintains referential integrity through automatic index management.
+    All CREATE, UPDATE, and DELETE operations maintain index consistency:
+
+    - CREATE operations add entries to all relevant indexes
+    - UPDATE operations update indexes when indexed fields change
+    - DELETE operations remove all index entries and cascade to dependent entities
+
+    Index Integrity Guarantee:
+        All indexes are kept synchronized with entity storage. No orphaned references
+        exist after any operation. DELETE operations use cascade deletion to maintain
+        referential integrity across related entities.
+    """
 
     def __init__(self) -> None:
         # Core entities
@@ -1014,6 +1027,244 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
 
         self._inventory_items[inventory_item_id] = updated_inventory_item
         return updated_inventory_item
+
+    # ==============================================================================
+    # DELETE Methods - Data Removal Operations
+    # ==============================================================================
+    #
+    # Note: All DELETE methods maintain index integrity by removing all related
+    # index entries when entities are deleted. Cascade deletions automatically
+    # remove dependent entities to preserve referential integrity.
+
+    def delete_inventory_item(self, inventory_item_id: UUID) -> bool:
+        """Delete an inventory item from the database.
+
+        Args:
+            inventory_item_id: Inventory item UUID to delete
+
+        Returns:
+            True on successful deletion
+
+        Raises:
+            ValueError: If inventory item does not exist
+
+        Example:
+            db.delete_inventory_item(item_id)
+        """
+        if inventory_item_id not in self._inventory_items:
+            raise ValueError(f"Inventory item with ID '{inventory_item_id}' does not exist")
+
+        # Remove from main storage
+        del self._inventory_items[inventory_item_id]
+
+        # Clean up indexes
+        del self._inventory_product_index[inventory_item_id]
+
+        return True
+
+    def delete_supplier_product(self, supplier_product_id: UUID) -> bool:
+        """Delete a supplier-product relationship.
+
+        Args:
+            supplier_product_id: SupplierProduct UUID to delete
+
+        Returns:
+            True on successful deletion
+
+        Raises:
+            ValueError: If supplier-product relationship does not exist
+
+        Example:
+            db.delete_supplier_product(relationship_id)
+        """
+        if supplier_product_id not in self._supplier_products:
+            raise ValueError(f"Supplier-Product relationship with ID '{supplier_product_id}' does not exist")
+
+        # Get the relationship before deleting
+        supplier_product = self._supplier_products[supplier_product_id]
+
+        # Remove from main storage
+        del self._supplier_products[supplier_product_id]
+
+        # Clean up indexes - remove from product's supplier list
+        if supplier_product.product_id in self._supplier_product_index:
+            self._supplier_product_index[supplier_product.product_id].remove(supplier_product_id)
+
+        return True
+
+    def delete_product(self, product_id: UUID) -> Dict[str, int]:
+        """Delete a product and all related data (CASCADE).
+
+        This method automatically deletes:
+        - All supplier-product relationships for this product
+        - All inventory items tracking this product
+        - The product itself
+
+        Args:
+            product_id: Product UUID to delete
+
+        Returns:
+            Dictionary with counts of deleted entities:
+            {
+                "deleted_supplier_products": int,
+                "deleted_inventory_items": int,
+                "deleted_product": 1
+            }
+
+        Raises:
+            ValueError: If product does not exist
+
+        Example:
+            result = db.delete_product(product_id)
+            print(f"Deleted {result['deleted_inventory_items']} inventory items")
+        """
+        if product_id not in self._products:
+            raise ValueError(f"Product with ID '{product_id}' does not exist")
+
+        product = self._products[product_id]
+        deleted_counts = {
+            "deleted_supplier_products": 0,
+            "deleted_inventory_items": 0,
+            "deleted_product": 0,
+        }
+
+        # CASCADE: Delete all supplier-product relationships for this product
+        # Collect IDs first to avoid modifying dict during iteration
+        supplier_product_ids = list(self._supplier_product_index.get(product_id, []))
+        for sp_id in supplier_product_ids:
+            self.delete_supplier_product(sp_id)
+            deleted_counts["deleted_supplier_products"] += 1
+
+        # CASCADE: Delete all inventory items for this product
+        # Collect IDs first to avoid modifying dict during iteration
+        inventory_item_ids = [
+            inv_id for inv_id, prod_id in self._inventory_product_index.items() if prod_id == product_id
+        ]
+        for inv_id in inventory_item_ids:
+            self.delete_inventory_item(inv_id)
+            deleted_counts["deleted_inventory_items"] += 1
+
+        # Remove from main storage
+        del self._products[product_id]
+
+        # Clean up indexes
+        if product.name in self._product_name_index:
+            del self._product_name_index[product.name]
+
+        if product.sku and product.sku in self._product_sku_index:
+            del self._product_sku_index[product.sku]
+
+        category_lower = product.category.lower()
+        if category_lower in self._category_index and product_id in self._category_index[category_lower]:
+            self._category_index[category_lower].remove(product_id)
+
+        if product_id in self._supplier_product_index:
+            del self._supplier_product_index[product_id]
+
+        deleted_counts["deleted_product"] = 1
+        return deleted_counts
+
+    def delete_supplier(self, supplier_id: str) -> Dict[str, int]:
+        """Delete a supplier and all related relationships (CASCADE).
+
+        This method automatically deletes:
+        - All supplier-product relationships for this supplier
+        - The supplier itself
+
+        Args:
+            supplier_id: Supplier ID to delete
+
+        Returns:
+            Dictionary with counts of deleted entities:
+            {
+                "deleted_supplier_products": int,
+                "deleted_supplier": 1
+            }
+
+        Raises:
+            ValueError: If supplier does not exist
+
+        Example:
+            result = db.delete_supplier("SUP-001")
+            print(f"Deleted {result['deleted_supplier_products']} relationships")
+        """
+        if supplier_id not in self._suppliers:
+            raise ValueError(f"Supplier with ID '{supplier_id}' does not exist")
+
+        deleted_counts = {"deleted_supplier_products": 0, "deleted_supplier": 0}
+
+        # CASCADE: Delete all supplier-product relationships for this supplier
+        # Collect IDs first to avoid modifying dict during iteration
+        supplier_product_ids = [
+            sp_id for sp_id, sp in self._supplier_products.items() if sp.supplier_id == supplier_id
+        ]
+        for sp_id in supplier_product_ids:
+            self.delete_supplier_product(sp_id)
+            deleted_counts["deleted_supplier_products"] += 1
+
+        # Remove from main storage
+        del self._suppliers[supplier_id]
+
+        deleted_counts["deleted_supplier"] = 1
+        return deleted_counts
+
+    def delete_category(self, name: str) -> Dict[str, int]:
+        """Delete a category and all related data (CASCADE).
+
+        This method automatically deletes:
+        - All products in this category
+          - Which cascades to all supplier-product relationships
+          - Which cascades to all inventory items
+        - The category itself
+
+        Args:
+            name: Category name to delete (case-insensitive)
+
+        Returns:
+            Dictionary with counts of deleted entities:
+            {
+                "deleted_products": int,
+                "deleted_supplier_products": int,
+                "deleted_inventory_items": int,
+                "deleted_category": 1
+            }
+
+        Raises:
+            ValueError: If category does not exist
+
+        Example:
+            result = db.delete_category("electronics")
+            print(f"Deleted {result['deleted_products']} products")
+        """
+        name_lower = name.lower()
+        if name_lower not in self._categories:
+            raise ValueError(f"Category '{name}' does not exist")
+
+        deleted_counts = {
+            "deleted_products": 0,
+            "deleted_supplier_products": 0,
+            "deleted_inventory_items": 0,
+            "deleted_category": 0,
+        }
+
+        # CASCADE: Delete all products in this category (which cascades further)
+        # Collect IDs first to avoid modifying dict during iteration
+        product_ids = list(self._category_index.get(name_lower, []))
+        for product_id in product_ids:
+            result = self.delete_product(product_id)
+            deleted_counts["deleted_products"] += 1
+            deleted_counts["deleted_supplier_products"] += result["deleted_supplier_products"]
+            deleted_counts["deleted_inventory_items"] += result["deleted_inventory_items"]
+
+        # Remove from main storage
+        del self._categories[name_lower]
+
+        # Clean up indexes
+        if name_lower in self._category_index:
+            del self._category_index[name_lower]
+
+        deleted_counts["deleted_category"] = 1
+        return deleted_counts
 
 
 # Initialize the sample database

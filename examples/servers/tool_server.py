@@ -714,6 +714,130 @@ def update_inventory_item_tool(  # pylint: disable=too-many-arguments,too-many-p
     )
 
 
+# ==============================================================================
+# DELETE Tools - Data Removal Operations
+# ==============================================================================
+
+
+@mcp.tool(name="delete_inventory_item")
+def delete_inventory_item_tool(inventory_item_id: str) -> str:
+    """Delete an inventory item from the database.
+
+    WARNING: This permanently removes the inventory tracking record.
+
+    Parameter: inventory_item_id (string) - Inventory item UUID
+    Use search_inventory or items_by_name tools to get valid inventory item IDs.
+
+    Returns: Success message
+
+    Example:
+        delete_inventory_item("123e4567-e89b-12d3-a456-426614174000")
+    """
+    db.delete_inventory_item(UUID(inventory_item_id))
+    return f"Successfully deleted inventory item '{inventory_item_id}'"
+
+
+@mcp.tool(name="delete_supplier_product")
+def delete_supplier_product_tool(supplier_product_id: str) -> str:
+    """Delete a supplier-product relationship.
+
+    Removes the link between a supplier and product. Does not delete the
+    supplier or product themselves.
+
+    Parameter: supplier_product_id (string) - SupplierProduct UUID
+    Use supplier_products_by_supplier or supplier_products_by_product tools
+    to get valid relationship IDs.
+
+    Returns: Success message
+
+    Example:
+        delete_supplier_product("123e4567-e89b-12d3-a456-426614174000")
+    """
+    db.delete_supplier_product(UUID(supplier_product_id))
+    return f"Successfully deleted supplier-product relationship '{supplier_product_id}'"
+
+
+@mcp.tool(name="delete_product")
+def delete_product_tool(product_id: str) -> Dict[str, int]:
+    """Delete a product and all related data (CASCADE).
+
+    WARNING: This will also delete:
+    - All supplier-product relationships for this product
+    - All inventory items tracking this product
+
+    This is a destructive operation that cannot be undone.
+
+    Parameter: product_id (string) - Product UUID
+    Use list_products tool to get valid product IDs.
+
+    Returns:
+        Dictionary with counts of deleted entities:
+        {
+            "deleted_supplier_products": int,
+            "deleted_inventory_items": int,
+            "deleted_product": 1
+        }
+
+    Example:
+        delete_product("123e4567-e89b-12d3-a456-426614174000")
+    """
+    return db.delete_product(UUID(product_id))
+
+
+@mcp.tool(name="delete_supplier")
+def delete_supplier_tool(supplier_id: str) -> Dict[str, int]:
+    """Delete a supplier and all related relationships (CASCADE).
+
+    WARNING: This will also delete:
+    - All supplier-product relationships for this supplier
+
+    Products themselves are NOT deleted, only the supplier relationships.
+
+    Parameter: supplier_id (string) - Supplier ID (e.g., "SUP-001")
+    Use list_suppliers tool to get valid supplier IDs.
+
+    Returns:
+        Dictionary with counts of deleted entities:
+        {
+            "deleted_supplier_products": int,
+            "deleted_supplier": 1
+        }
+
+    Example:
+        delete_supplier("SUP-001")
+    """
+    return db.delete_supplier(supplier_id)
+
+
+@mcp.tool(name="delete_category")
+def delete_category_tool(name: str) -> Dict[str, int]:
+    """Delete a category and all related data (CASCADE).
+
+    WARNING: This will also delete:
+    - All products in this category
+    - All supplier-product relationships for those products
+    - All inventory items for those products
+
+    This is the most destructive operation and cannot be undone.
+
+    Parameter: name (string) - Category name (case-insensitive)
+    Use list_categories tool to get valid category names.
+
+    Returns:
+        Dictionary with counts of deleted entities:
+        {
+            "deleted_products": int,
+            "deleted_supplier_products": int,
+            "deleted_inventory_items": int,
+            "deleted_category": 1
+        }
+
+    Example:
+        delete_category("electronics")
+    """
+    return db.delete_category(name)
+
+
 # Tools returning other types from media_handler for demonstration purposes
 # Currently OpenAI function calling only supports text-based outputs and the
 # chat client example will just display the media content from the tool call
