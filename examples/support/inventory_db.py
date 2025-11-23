@@ -1,7 +1,12 @@
+"""Inventory database module for managing products, suppliers, and inventory items."""
+
+# pylint: disable=too-many-lines
+
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import (
+    Any,
     Dict,
     List,
     Optional,
@@ -208,6 +213,10 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         self._supplier_product_index: Dict[UUID, List[UUID]] = {}  # product_id -> supplier_product ids
         self._inventory_product_index: Dict[UUID, UUID] = {}  # inventory_id -> product_id
 
+    # ==============================================================================
+    # CREATE Methods - Data Insertion Operations
+    # ==============================================================================
+
     def add_category(self, name: str, description: Optional[str] = None) -> Dict[str, str]:
         """Add a new product category.
 
@@ -299,6 +308,10 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         self._inventory_product_index[inventory_item_obj.id] = inventory_item_obj.product_id
 
         return inventory_item_obj
+
+    # ==============================================================================
+    # READ Methods - Query and Retrieval Operations
+    # ==============================================================================
 
     def get_category_by_name(self, category_name: str) -> Optional[Dict[str, str]]:
         """Get category by name (case-insensitive).
@@ -630,11 +643,405 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         total = sum(item.price * item.quantity_on_hand for item in all_items)
         return Decimal(str(total))
 
+    # ==============================================================================
+    # UPDATE Methods - Data Modification Operations
+    # ==============================================================================
 
-# Initialize the database
+    def update_category(self, name: str, description: Optional[str] = None) -> Dict[str, str]:
+        """Update an existing product category's description.
+
+        The category name cannot be changed as it serves as the primary key.
+        Only the description field can be updated.
+
+        Args:
+            name: Category name to update (case-insensitive)
+            description: New category description (if None, description is cleared)
+
+        Returns:
+            Dictionary with updated category information
+
+        Raises:
+            ValueError: If category does not exist
+
+        Example:
+            db.update_category("electronics", "Updated description for electronics")
+        """
+        name_lower = name.lower()
+
+        # Check if category exists
+        if name_lower not in self._categories:
+            raise ValueError(f"Category '{name}' does not exist")
+
+        # Update the category description
+        self._categories[name_lower]["description"] = description or ""
+
+        return self._categories[name_lower]
+
+    def update_supplier(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        supplier_id: str,
+        name: Optional[str] = None,
+        contact_email: Optional[str] = None,
+        contact_phone: Optional[str] = None,
+        address: Optional[str] = None,
+    ) -> Supplier:
+        """Update an existing supplier's information.
+
+        Only provided fields will be updated. Fields not provided will retain their current values.
+        The supplier_id cannot be changed. The updated_at timestamp is automatically updated.
+
+        Args:
+            supplier_id: Supplier ID to update (required)
+            name: New supplier name (optional)
+            contact_email: New contact email address (optional)
+            contact_phone: New contact phone number (optional)
+            address: New supplier address (optional)
+
+        Returns:
+            Updated Supplier object with auto-updated timestamp
+
+        Raises:
+            ValueError: If supplier does not exist
+
+        Example:
+            db.update_supplier("SUP001", name="Acme Corporation", contact_email="new@acme.com")
+
+        Note:
+            The updated_at field is automatically set to the current timestamp.
+        """
+        # Check if supplier exists
+        if supplier_id not in self._suppliers:
+            raise ValueError(f"Supplier with ID '{supplier_id}' does not exist")
+
+        # Get existing supplier
+        existing_supplier = self._suppliers[supplier_id]
+
+        # Build update dictionary with only provided fields
+        updates: Dict[str, Any] = {}
+        if name is not None:
+            updates["name"] = name
+        if contact_email is not None:
+            updates["contact_email"] = contact_email
+        if contact_phone is not None:
+            updates["contact_phone"] = contact_phone
+        if address is not None:
+            updates["address"] = address
+
+        # Create updated supplier using Pydantic's model_copy
+        # This automatically updates the updated_at field
+        updated_supplier = existing_supplier.model_copy(update=updates)
+
+        # Store updated supplier
+        self._suppliers[supplier_id] = updated_supplier
+
+        return updated_supplier
+
+    def update_product(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-branches
+        self,
+        product_id: UUID,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        category: Optional[str] = None,
+        sku: Optional[str] = None,
+        barcode: Optional[str] = None,
+        weight: Optional[Decimal] = None,
+        dimensions: Optional[str] = None,
+    ) -> Product:
+        """Update an existing product's information.
+
+        Only provided fields will be updated. Fields not provided will retain their current values.
+        The product_id cannot be changed. The updated_at timestamp is automatically updated via
+        Pydantic field validator.
+
+        This method handles complex index updates when name, SKU, or category changes.
+
+        Args:
+            product_id: Product UUID to update (required)
+            name: New product name (optional, must be unique case-insensitive)
+            description: New product description (optional)
+            category: New product category (optional, must exist)
+            sku: New SKU code (optional, must be unique if provided)
+            barcode: New barcode (optional)
+            weight: New weight in kilograms (optional)
+            dimensions: New dimensions string (optional)
+
+        Returns:
+            Updated Product object with auto-updated timestamp
+
+        Raises:
+            ValueError: If product does not exist
+            ValueError: If new category does not exist
+            ValueError: If new name already exists (case-insensitive)
+            ValueError: If new SKU already exists
+
+        Example:
+            db.update_product(
+                product_id,
+                name="Updated Product Name",
+                category="electronics",
+                price=Decimal("99.99")
+            )
+
+        Note:
+            - The updated_at field is automatically set to the current timestamp
+            - Name changes update the product name index
+            - SKU changes update the product SKU index
+            - Category changes update the category index
+            - Use list_categories() to see valid category names
+        """
+        # Check if product exists
+        if product_id not in self._products:
+            raise ValueError(f"Product with ID '{product_id}' does not exist")
+
+        # Get existing product
+        existing_product = self._products[product_id]
+
+        # Validate category if being changed
+        if category is not None:
+            category_lower = category.lower()
+            if category_lower not in self._categories:
+                raise ValueError(
+                    f"Category '{category}' does not exist. " f"Please create it first using add_category()."
+                )
+
+        # Validate name uniqueness if being changed
+        if name is not None and name != existing_product.name:
+            # pylint: disable=consider-using-dict-items
+            if name.lower() in {
+                n.lower() for n in self._product_name_index if self._product_name_index[n] != product_id
+            }:
+                raise ValueError(f"Product with name '{name}' already exists")
+
+        # Validate SKU uniqueness if being changed
+        if sku is not None and sku != existing_product.sku:
+            if sku in self._product_sku_index and self._product_sku_index[sku] != product_id:
+                raise ValueError(f"Product with SKU '{sku}' already exists")
+
+        # Build update dictionary with only provided fields
+        updates: Dict[str, Any] = {}
+        if name is not None:
+            updates["name"] = name
+        if description is not None:
+            updates["description"] = description
+        if category is not None:
+            updates["category"] = category
+        if sku is not None:
+            updates["sku"] = sku
+        if barcode is not None:
+            updates["barcode"] = barcode
+        if weight is not None:
+            updates["weight"] = weight
+        if dimensions is not None:
+            updates["dimensions"] = dimensions
+
+        # Create updated product using Pydantic's model_copy
+        # This automatically updates the updated_at field via field validator
+        updated_product = existing_product.model_copy(update=updates)
+
+        # Update indexes if name changed
+        if name is not None and name != existing_product.name:
+            # Remove old name from index
+            if existing_product.name in self._product_name_index:
+                del self._product_name_index[existing_product.name]
+            # Add new name to index
+            self._product_name_index[name] = product_id
+
+        # Update indexes if SKU changed
+        if sku is not None and sku != existing_product.sku:
+            # Remove old SKU from index if it existed
+            if existing_product.sku and existing_product.sku in self._product_sku_index:
+                del self._product_sku_index[existing_product.sku]
+            # Add new SKU to index if provided
+            if sku:
+                self._product_sku_index[sku] = product_id
+
+        # Update category index if category changed
+        if category is not None and category.lower() != existing_product.category.lower():
+            # Remove from old category index
+            old_category_lower = existing_product.category.lower()
+            if old_category_lower in self._category_index:
+                if product_id in self._category_index[old_category_lower]:
+                    self._category_index[old_category_lower].remove(product_id)
+
+            # Add to new category index
+            new_category_lower = category.lower()
+            if new_category_lower not in self._category_index:
+                self._category_index[new_category_lower] = []
+            self._category_index[new_category_lower].append(product_id)
+
+        # Store updated product
+        self._products[product_id] = updated_product
+
+        return updated_product
+
+    def update_supplier_product(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        supplier_product_id: UUID,
+        supplier_part_number: Optional[str] = None,
+        cost: Optional[Decimal] = None,
+        lead_time_days: Optional[int] = None,
+        minimum_order_quantity: Optional[int] = None,
+        is_primary_supplier: Optional[bool] = None,
+    ) -> SupplierProduct:
+        """Update an existing supplier-product relationship.
+
+        Only provided fields will be updated. Fields not provided will retain their current values.
+        The relationship IDs (product_id, supplier_id) cannot be changed as they define the
+        relationship. The updated_at timestamp is automatically updated.
+
+        Args:
+            supplier_product_id: SupplierProduct UUID to update (required)
+            supplier_part_number: New supplier part number (optional)
+            cost: New supplier cost (optional, must be >= 0)
+            lead_time_days: New lead time in days (optional, must be >= 0)
+            minimum_order_quantity: New minimum order quantity (optional, must be >= 1)
+            is_primary_supplier: New primary supplier flag (optional)
+
+        Returns:
+            Updated SupplierProduct object with auto-updated timestamp
+
+        Raises:
+            ValueError: If supplier-product relationship does not exist
+            ValueError: If field constraints are violated (via Pydantic validation)
+
+        Example:
+            db.update_supplier_product(
+                supplier_product_id,
+                cost=Decimal("850.00"),
+                lead_time_days=5,
+                is_primary_supplier=True
+            )
+
+        Note:
+            - The updated_at field is automatically set to the current timestamp
+            - The product_id and supplier_id are immutable (they define the relationship)
+            - Pydantic validates: cost >= 0, lead_time_days >= 0, minimum_order_quantity >= 1
+        """
+        # Check if supplier-product relationship exists
+        if supplier_product_id not in self._supplier_products:
+            raise ValueError(f"Supplier-Product relationship with ID '{supplier_product_id}' does not exist")
+
+        # Get existing supplier-product relationship
+        existing_supplier_product = self._supplier_products[supplier_product_id]
+
+        # Build update dictionary with only provided fields
+        updates: Dict[str, Any] = {}
+        if supplier_part_number is not None:
+            updates["supplier_part_number"] = supplier_part_number
+        if cost is not None:
+            updates["cost"] = cost
+        if lead_time_days is not None:
+            updates["lead_time_days"] = lead_time_days
+        if minimum_order_quantity is not None:
+            updates["minimum_order_quantity"] = minimum_order_quantity
+        if is_primary_supplier is not None:
+            updates["is_primary_supplier"] = is_primary_supplier
+
+        # Create updated supplier-product using Pydantic's model_copy
+        # This automatically updates the updated_at field
+        updated_supplier_product = existing_supplier_product.model_copy(update=updates)
+
+        # Store updated supplier-product
+        self._supplier_products[supplier_product_id] = updated_supplier_product
+
+        return updated_supplier_product
+
+    def update_inventory_item(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        inventory_item_id: UUID,
+        location_id: Optional[str] = None,
+        status: Optional[ItemStatus] = None,
+        price: Optional[Decimal] = None,
+        quantity_on_hand: Optional[int] = None,
+        quantity_reserved: Optional[int] = None,
+        quantity_allocated: Optional[int] = None,
+        reorder_point: Optional[int] = None,
+        max_stock: Optional[int] = None,
+        last_restocked_at: Optional[datetime] = None,
+        last_counted_at: Optional[datetime] = None,
+    ) -> InventoryItem:
+        """Update an existing inventory item's information.
+
+        Only provided fields will be updated. Fields not provided will retain their current values.
+        The inventory_item_id and product_id cannot be changed. The updated_at timestamp is
+        automatically updated via Pydantic field validator.
+
+        Args:
+            inventory_item_id: InventoryItem UUID to update (required)
+            location_id: New storage location identifier (optional)
+            status: New inventory status (optional)
+            price: New selling price (optional, must be > 0)
+            quantity_on_hand: New current stock quantity (optional, must be >= 0)
+            quantity_reserved: New reserved quantity (optional, must be >= 0)
+            quantity_allocated: New allocated quantity (optional, must be >= 0)
+            reorder_point: New reorder threshold (optional, must be >= 0)
+            max_stock: New maximum stock level (optional, must be > 0)
+            last_restocked_at: New last restock timestamp (optional)
+            last_counted_at: New last count timestamp (optional)
+
+        Returns:
+            Updated InventoryItem object with auto-updated timestamp
+
+        Raises:
+            ValueError: If inventory item does not exist
+            ValueError: If field constraints are violated (via Pydantic validation)
+
+        Example:
+            db.update_inventory_item(
+                inventory_item_id,
+                quantity_on_hand=100,
+                status=ItemStatus.ACTIVE,
+                last_restocked_at=datetime.now()
+            )
+
+        Note:
+            - The updated_at field is automatically set to the current timestamp
+            - The product_id is immutable (defines which product is tracked)
+            - Pydantic validates: price > 0, quantities >= 0, max_stock > 0
+            - This supports Many-to-One: multiple items can track the same product at different locations
+        """
+        # Check if inventory item exists
+        if inventory_item_id not in self._inventory_items:
+            raise ValueError(f"Inventory item with ID '{inventory_item_id}' does not exist")
+
+        # Get existing inventory item
+        existing_inventory_item = self._inventory_items[inventory_item_id]
+
+        # Build update dictionary with only provided fields
+        updates: Dict[str, Any] = {}
+        if location_id is not None:
+            updates["location_id"] = location_id
+        if status is not None:
+            updates["status"] = status
+        if price is not None:
+            updates["price"] = price
+        if quantity_on_hand is not None:
+            updates["quantity_on_hand"] = quantity_on_hand
+        if quantity_reserved is not None:
+            updates["quantity_reserved"] = quantity_reserved
+        if quantity_allocated is not None:
+            updates["quantity_allocated"] = quantity_allocated
+        if reorder_point is not None:
+            updates["reorder_point"] = reorder_point
+        if max_stock is not None:
+            updates["max_stock"] = max_stock
+        if last_restocked_at is not None:
+            updates["last_restocked_at"] = last_restocked_at
+        if last_counted_at is not None:
+            updates["last_counted_at"] = last_counted_at
+
+        # Create updated inventory item using Pydantic's model_copy
+        # This automatically updates the updated_at field via field validator
+        updated_inventory_item = existing_inventory_item.model_copy(update=updates)
+
+        # Store updated inventory item
+        self._inventory_items[inventory_item_id] = updated_inventory_item
+
+        return updated_inventory_item
+
+
+# Initialize the sample database
 db = InventoryDatabase()
-
-# Initialize with normalized sample data
 
 # Create categories
 categories_data = [
