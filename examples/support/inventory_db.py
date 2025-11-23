@@ -667,14 +667,10 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
             db.update_category("electronics", "Updated description for electronics")
         """
         name_lower = name.lower()
-
-        # Check if category exists
         if name_lower not in self._categories:
             raise ValueError(f"Category '{name}' does not exist")
 
-        # Update the category description
         self._categories[name_lower]["description"] = description or ""
-
         return self._categories[name_lower]
 
     def update_supplier(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -705,15 +701,9 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
 
         Example:
             db.update_supplier("SUP001", name="Acme Corporation", contact_email="new@acme.com")
-
-        Note:
-            The updated_at field is automatically set to the current timestamp.
         """
-        # Check if supplier exists
         if supplier_id not in self._suppliers:
             raise ValueError(f"Supplier with ID '{supplier_id}' does not exist")
-
-        # Get existing supplier
         existing_supplier = self._suppliers[supplier_id]
 
         # Build update dictionary with only provided fields
@@ -731,9 +721,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         # This automatically updates the updated_at field
         updated_supplier = existing_supplier.model_copy(update=updates)
 
-        # Store updated supplier
         self._suppliers[supplier_id] = updated_supplier
-
         return updated_supplier
 
     def update_product(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-branches
@@ -769,10 +757,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
             Updated Product object with auto-updated timestamp
 
         Raises:
-            ValueError: If product does not exist
-            ValueError: If new category does not exist
-            ValueError: If new name already exists (case-insensitive)
-            ValueError: If new SKU already exists
+            ValueError if product does not exist, category doesn't exist, name exists, or SKU exists
 
         Example:
             db.update_product(
@@ -782,18 +767,14 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
                 price=Decimal("99.99")
             )
 
-        Note:
-            - The updated_at field is automatically set to the current timestamp
+        Notes:
             - Name changes update the product name index
             - SKU changes update the product SKU index
             - Category changes update the category index
             - Use list_categories() to see valid category names
         """
-        # Check if product exists
         if product_id not in self._products:
             raise ValueError(f"Product with ID '{product_id}' does not exist")
-
-        # Get existing product
         existing_product = self._products[product_id]
 
         # Validate category if being changed
@@ -840,18 +821,14 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
 
         # Update indexes if name changed
         if name is not None and name != existing_product.name:
-            # Remove old name from index
             if existing_product.name in self._product_name_index:
                 del self._product_name_index[existing_product.name]
-            # Add new name to index
             self._product_name_index[name] = product_id
 
         # Update indexes if SKU changed
         if sku is not None and sku != existing_product.sku:
-            # Remove old SKU from index if it existed
             if existing_product.sku and existing_product.sku in self._product_sku_index:
                 del self._product_sku_index[existing_product.sku]
-            # Add new SKU to index if provided
             if sku:
                 self._product_sku_index[sku] = product_id
 
@@ -869,9 +846,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
                 self._category_index[new_category_lower] = []
             self._category_index[new_category_lower].append(product_id)
 
-        # Store updated product
         self._products[product_id] = updated_product
-
         return updated_product
 
     def update_supplier_product(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -912,16 +887,12 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
                 is_primary_supplier=True
             )
 
-        Note:
-            - The updated_at field is automatically set to the current timestamp
+        Notes:
             - The product_id and supplier_id are immutable (they define the relationship)
             - Pydantic validates: cost >= 0, lead_time_days >= 0, minimum_order_quantity >= 1
         """
-        # Check if supplier-product relationship exists
         if supplier_product_id not in self._supplier_products:
             raise ValueError(f"Supplier-Product relationship with ID '{supplier_product_id}' does not exist")
-
-        # Get existing supplier-product relationship
         existing_supplier_product = self._supplier_products[supplier_product_id]
 
         # Build update dictionary with only provided fields
@@ -941,9 +912,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         # This automatically updates the updated_at field
         updated_supplier_product = existing_supplier_product.model_copy(update=updates)
 
-        # Store updated supplier-product
         self._supplier_products[supplier_product_id] = updated_supplier_product
-
         return updated_supplier_product
 
     def update_inventory_item(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -983,8 +952,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
             Updated InventoryItem object with auto-updated timestamp
 
         Raises:
-            ValueError: If inventory item does not exist
-            ValueError: If field constraints are violated (via Pydantic validation)
+            ValueError: If inventory item does not exist or field constraints are violated (via Pydantic validation)
 
         Example:
             db.update_inventory_item(
@@ -994,17 +962,13 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
                 last_restocked_at=datetime.now()
             )
 
-        Note:
-            - The updated_at field is automatically set to the current timestamp
+        Notes:
             - The product_id is immutable (defines which product is tracked)
             - Pydantic validates: price > 0, quantities >= 0, max_stock > 0
             - This supports Many-to-One: multiple items can track the same product at different locations
         """
-        # Check if inventory item exists
         if inventory_item_id not in self._inventory_items:
             raise ValueError(f"Inventory item with ID '{inventory_item_id}' does not exist")
-
-        # Get existing inventory item
         existing_inventory_item = self._inventory_items[inventory_item_id]
 
         # Build update dictionary with only provided fields
@@ -1034,9 +998,7 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         # This automatically updates the updated_at field via field validator
         updated_inventory_item = existing_inventory_item.model_copy(update=updates)
 
-        # Store updated inventory item
         self._inventory_items[inventory_item_id] = updated_inventory_item
-
         return updated_inventory_item
 
 

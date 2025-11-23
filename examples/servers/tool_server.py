@@ -452,7 +452,7 @@ def update_category_tool(name: str, description: str = "") -> Dict[str, str]:
     Example:
         update_category("electronics", "Electronic devices and computer accessories")
 
-    Note:
+    Notes:
         - Use list_categories tool to see existing categories before updating
         - Empty description will clear the category description
         - Category names are stored in lowercase
@@ -489,10 +489,9 @@ def update_supplier_tool(
     Example:
         update_supplier("SUP001", name="Acme Corporation Ltd", contact_email="new@acme.com")
 
-    Note:
+    Notes:
         - Use list_suppliers tool to see existing suppliers and their IDs
         - Only provided parameters are updated (partial updates supported)
-        - The updated_at field is automatically set to current timestamp
         - Supplier ID cannot be changed (it's the primary key)
     """
     return db.update_supplier(
@@ -542,13 +541,10 @@ def update_product_tool(  # pylint: disable=too-many-arguments,too-many-position
                       name="Laptop Pro 16", category="electronics",
                       weight=2.8, sku="LAP-002")
 
-    Note:
-        - Use list_products tool to get valid product IDs and current values
+    Notes:
+        - Use list_products tool to get valid product UUIDs and current values
         - Use list_categories tool to see valid category names
-        - Product UUIDs are shown in list_products output (id field)
         - Only provided parameters are updated (partial updates supported)
-        - The updated_at field is automatically set to current timestamp
-        - Set weight to -1 or omit to leave unchanged; positive values update the weight
         - Product ID cannot be changed (it's the primary key)
     """
     return db.update_product(
@@ -597,14 +593,10 @@ def update_supplier_product_tool(  # pylint: disable=too-many-arguments,too-many
                                cost=925.50, lead_time_days=5,
                                is_primary_supplier=True)
 
-    Note:
+    Notes:
         - Supplier-product relationship UUIDs are shown when creating relationships
         - Only provided parameters are updated (partial updates supported)
-        - The updated_at field is automatically set to current timestamp
         - The product_id and supplier_id are immutable (they define the relationship)
-        - Set cost to -1 or omit to leave unchanged; values >= 0 update the cost
-        - Set lead_time_days to -1 or omit to leave unchanged; values >= 0 update lead time
-        - Set minimum_order_quantity to 0 or omit to leave unchanged; values >= 1 update MOQ
     """
     return db.update_supplier_product(
         supplier_product_id=UUID(supplier_product_id),
@@ -663,25 +655,18 @@ def update_inventory_item_tool(  # pylint: disable=too-many-arguments,too-many-p
                              quantity_on_hand=150, status="active",
                              last_restocked_at="2024-01-15T10:30:00")
 
-    Note:
+    Notes:
         - Use search_inventory or items_by_name tools to get valid inventory item IDs
         - Inventory item UUIDs are shown in search results (id field)
         - Only provided parameters are updated (partial updates supported)
-        - The updated_at field is automatically set to current timestamp
         - The product_id is immutable (defines which product is tracked)
         - Valid status values: 'active', 'inactive', 'out_of_stock', 'discontinued'
-        - Set numeric values to -1 or omit to leave unchanged; valid values update the field
         - Timestamps should be in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)
         - This supports Many-to-One: multiple items can track same product at different locations
     """
     # Parse datetime strings if provided
-    restocked_dt = None
-    if last_restocked_at is not None:
-        restocked_dt = datetime.fromisoformat(last_restocked_at)
-
-    counted_dt = None
-    if last_counted_at is not None:
-        counted_dt = datetime.fromisoformat(last_counted_at)
+    restocked_dt = datetime.fromisoformat(last_restocked_at) if last_restocked_at is not None else None
+    counted_dt = datetime.fromisoformat(last_counted_at) if last_counted_at is not None else None
 
     return db.update_inventory_item(
         inventory_item_id=UUID(inventory_item_id),
