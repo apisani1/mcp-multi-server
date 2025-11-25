@@ -16,10 +16,10 @@ from uuid import UUID
 from mcp.server.fastmcp import FastMCP
 from mcp.types import (
     AudioContent,
-    CallToolResult,
-    ImageContent,
-    EmbeddedResource,
     BlobResourceContents,
+    CallToolResult,
+    EmbeddedResource,
+    ImageContent,
     ResourceLink,
 )
 
@@ -333,67 +333,265 @@ def add_inventory_item_tool(  # pylint: disable=too-many-arguments,too-many-posi
 
 @mcp.tool(name="inventory_overview")
 def get_inventory_overview_tool() -> InventoryOverview:
-    """Get an overview of the inventory, including:
-    - total inventory items
-    - total inventory value
-    - items with low level of stock
-    - items per category
-    - percentage of items per category
+    """Get a comprehensive overview of the entire inventory system.
+
+    Provides high-level statistics and metrics for inventory management decisions.
+
+    Parameters:
+        None
+
+    Returns:
+        InventoryOverview object containing:
+        - total_items: Total number of inventory items across all locations
+        - total_value: Total monetary value of all inventory (sum of price * quantity)
+        - low_stock_count: Number of items below their reorder point
+        - items_by_category: Count of items in each category
+        - category_percentages: Percentage distribution of items across categories
+
+    Example:
+        overview = inventory_overview()
+        # Returns: {"total_items": 150, "total_value": 125000.50, "low_stock_count": 12, ...}
     """
     return get_inventory_overview()
 
 
 @mcp.tool(name="database_schema")
 def get_database_schema_tool() -> DatabaseSchema:
-    """Get the complete database schema definition."""
+    """Get the complete database schema definition with all table structures.
+
+    Returns the schema for all database tables including field names, types,
+    constraints, and relationships. Useful for understanding the data model.
+
+    Parameters:
+        None
+
+    Returns:
+        DatabaseSchema object containing schema definitions for all tables:
+        - categories: Product category table structure
+        - suppliers: Supplier table structure
+        - products: Product table structure
+        - supplier_products: Supplier-product relationship table structure
+        - inventory_items: Inventory item table structure
+
+    Example:
+        schema = database_schema()
+        # Returns complete schema with all table definitions and relationships
+    """
     return get_database_schema()
 
 
 @mcp.tool(name="list_categories")
 def list_categories_tool() -> List[Dict[str, str]]:
-    """Get the list of all valid product categories with names and descriptions.."""
+    """Get the list of all valid product categories with names and descriptions.
+
+    Returns all categories that can be assigned to products. Use this before
+    adding or updating products to ensure you use valid category names.
+
+    Parameters:
+        None
+
+    Returns:
+        List of dictionaries, each containing:
+        - name: Category name (lowercase string)
+        - description: Category description (string, may be empty)
+
+    Example:
+        categories = list_categories()
+        # Returns: [{"name": "electronics", "description": "Electronic devices"}, ...]
+
+    Note:
+        Category names are case-insensitive and stored in lowercase.
+    """
     return list_categories()
 
 
 @mcp.tool(name="category_statistics")
 def get_category_statistics_tool(category: str) -> CategoryStatistics:
-    """Get category statistics, including:
-    - total category items in inventory
-    - total category value in inventory
-    - category items with low level of stock
-    - items per products in the category
-    - percentage of items per products in the category
+    """Get detailed statistics for a specific product category.
+
+    Provides analytics on inventory distribution and value within a category.
+
+    Parameters:
+        category (str): Category name to analyze (case-insensitive)
+
+    Returns:
+        CategoryStatistics object containing:
+        - category: The category name
+        - total_items: Total inventory items in this category
+        - total_value: Total monetary value of category inventory
+        - low_stock_count: Number of items below reorder point in this category
+        - items_by_product: Count of inventory items per product in category
+        - product_percentages: Percentage distribution across products in category
+
+    Raises:
+        ValueError if category does not exist
+
+    Example:
+        stats = category_statistics("electronics")
+        # Returns category-specific metrics for inventory planning
+
+    Note:
+        Use list_categories tool to see valid category names.
     """
     return get_category_statistics(category)
 
 
 @mcp.tool(name="products_by_category")
 def get_products_by_category_tool(category: str) -> Union[List[Product], str]:
-    """Get the list of all products in the specified category with full details."""
+    """Get all products in a specific category with complete product information.
+
+    Returns detailed product records for all products assigned to the specified category.
+
+    Parameters:
+        category (str): Category name to filter by (case-insensitive)
+
+    Returns:
+        List of Product objects, each containing:
+        - id: Product UUID
+        - name: Product name
+        - category: Product category
+        - description: Product description
+        - sku: Stock Keeping Unit code
+        - barcode: Product barcode
+        - weight: Weight in kilograms
+        - dimensions: Physical dimensions
+        - created_at: Creation timestamp
+        - updated_at: Last update timestamp
+
+        Returns error message string if category doesn't exist.
+
+    Example:
+        products = products_by_category("electronics")
+        # Returns list of all electronic products with full details
+
+    Note:
+        Use list_categories tool to see valid category names.
+    """
     return get_products_by_category(category)
 
 
 @mcp.tool(name="items_by_category")
 def get_items_by_category_tool(category: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Get the list of all inventory items in the specified category with full details."""
+    """Get all inventory items in a specific category with enriched product details.
+
+    Returns inventory records with joined product information for items in the category.
+
+    Parameters:
+        category (str): Category name to filter by (case-insensitive)
+
+    Returns:
+        List of EnrichedInventoryItem objects, each containing:
+        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
+        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+
+        Returns error message string if category doesn't exist.
+
+    Example:
+        items = items_by_category("electronics")
+        # Returns inventory items with product details for all electronics
+
+    Note:
+        - Use list_categories tool to see valid category names
+        - This returns actual inventory stock records, not just product definitions
+        - Supports Many-to-One: same product may appear multiple times at different locations
+    """
     return get_items_by_category(category)
 
 
 @mcp.tool(name="list_suppliers")
 def list_suppliers_tool() -> List[Supplier]:
-    """Get the list of all valid suppliers with names and full descriptions."""
+    """Get the list of all suppliers with complete contact and business information.
+
+    Returns all registered suppliers in the system. Use this to find supplier IDs
+    for creating supplier-product relationships or querying supplier data.
+
+    Parameters:
+        None
+
+    Returns:
+        List of Supplier objects, each containing:
+        - id: Unique supplier identifier
+        - name: Supplier business name
+        - contact_email: Contact email address
+        - contact_phone: Contact phone number
+        - address: Physical business address
+        - created_at: Registration timestamp
+        - updated_at: Last modification timestamp
+
+    Example:
+        suppliers = list_suppliers()
+        # Returns: [Supplier(id="SUP001", name="Acme Corp", ...), ...]
+
+    Note:
+        Supplier IDs are required for add_supplier_product and supplier query tools.
+    """
     return list_suppliers()
 
 
 @mcp.tool(name="products_by_supplier")
 def get_products_by_supplier_tool(supplier_name: str) -> Union[List[Product], str]:
-    """Get the list of all products for a specific supplier with full details."""
+    """Get all products supplied by a specific supplier with complete product details.
+
+    Returns product records for all products that have a supplier-product relationship
+    with the specified supplier.
+
+    Parameters:
+        supplier_name (str): Supplier name to filter by (exact match, case-sensitive)
+
+    Returns:
+        List of Product objects for products supplied by this supplier, each containing:
+        - id: Product UUID
+        - name: Product name
+        - category: Product category
+        - description: Product description
+        - sku: Stock Keeping Unit code
+        - barcode: Product barcode
+        - weight: Weight in kilograms
+        - dimensions: Physical dimensions
+        - created_at: Creation timestamp
+        - updated_at: Last update timestamp
+
+        Returns error message string if supplier not found.
+
+    Example:
+        products = products_by_supplier("Acme Corp")
+        # Returns all products supplied by Acme Corp
+
+    Note:
+        - Use list_suppliers tool to see valid supplier names
+        - Supplier name must match exactly (case-sensitive)
+        - Products may have multiple suppliers; this shows one supplier's products
+    """
     return get_products_by_supplier(supplier_name)
 
 
 @mcp.tool(name="items_by_supplier")
 def get_items_by_supplier_tool(supplier_name: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Get the list of all inventory items for a specific supplier with full details."""
+    """Get all inventory items for products supplied by a specific supplier.
+
+    Returns inventory stock records with enriched product details for items whose
+    products are supplied by the specified supplier.
+
+    Parameters:
+        supplier_name (str): Supplier name to filter by (exact match, case-sensitive)
+
+    Returns:
+        List of EnrichedInventoryItem objects, each containing:
+        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
+        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+
+        Returns error message string if supplier not found.
+
+    Example:
+        items = items_by_supplier("Acme Corp")
+        # Returns inventory stock for all products supplied by Acme Corp
+
+    Note:
+        - Use list_suppliers tool to see valid supplier names
+        - Supplier name must match exactly (case-sensitive)
+        - Shows actual inventory stock, not just product definitions
+        - Supports Many-to-One: same product may appear at multiple locations
+    """
     return get_items_by_supplier(supplier_name)
 
 
@@ -429,36 +627,128 @@ def get_supplier_products_by_product_tool(product_id: str) -> List[SupplierProdu
 
 @mcp.tool(name="list_products")
 def list_products_tool() -> List[Product]:
-    """Get the list of all valid products with full details."""
+    """Get the complete list of all products in the system with full details.
+
+    Returns all product records across all categories. Use this to discover product
+    IDs for inventory operations or to browse the product catalog.
+
+    Parameters:
+        None
+
+    Returns:
+        List of Product objects, each containing:
+        - id: Product UUID (use this for add_inventory_item, add_supplier_product)
+        - name: Product name (unique, case-insensitive)
+        - category: Product category
+        - description: Product description
+        - sku: Stock Keeping Unit code (unique if provided)
+        - barcode: Product barcode
+        - weight: Weight in kilograms
+        - dimensions: Physical dimensions (LxWxH format)
+        - created_at: Product creation timestamp
+        - updated_at: Last modification timestamp
+
+    Example:
+        products = list_products()
+        # Returns complete product catalog with all details
+
+    Note:
+        Product UUIDs (id field) are required for creating inventory items and supplier relationships.
+    """
     return list_products()
 
 
 @mcp.tool(name="items_by_name")
 def get_items_by_name_tool(product_name: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Find inventory items by exact product name.
-    Supports Many-to-One relationship: returns all inventory items for a product
-    (e.g., same product tracked at different locations).
-    Parameter: product_name (string) - Exact product name (case-sensitive).
-    Note: Names with spaces should be URL-encoded (e.g., %20 for spaces).
-    Use list_products tool to get valid product names.
-    Returns: List of inventory items if name matches exactly, or error message if not found.
+    """Find all inventory items for a product by its exact name.
+
+    Returns inventory stock records with enriched product details for items matching
+    the exact product name. Supports Many-to-One: multiple inventory items can track
+    the same product at different locations.
+
+    Parameters:
+        product_name (str): Exact product name (case-sensitive, use URL encoding for spaces)
+
+    Returns:
+        List of EnrichedInventoryItem objects (may contain multiple items for same product), each containing:
+        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
+        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+
+        Returns error message string if no product with this exact name exists.
+
+    Example:
+        items = items_by_name("Laptop Pro 15")
+        # Returns all inventory items for "Laptop Pro 15" across all locations
+
+    Note:
+        - Product name must match exactly (case-sensitive)
+        - Use list_products tool to see valid product names
+        - URL-encode names with spaces (e.g., "Laptop%20Pro%2015")
+        - Multiple items may be returned for the same product at different locations
     """
     return get_items_by_name(product_name)
 
 
 @mcp.tool(name="search_inventory")
 def search_inventory_tool(query: str) -> Union[List[EnrichedInventoryItem], str]:
-    """Search inventory by keyword in product name, description, or SKU. Not case-sensitive.
-    Note: Queries with spaces should be URL-encoded (e.g., %20 for spaces).
-    Parameter: query (string) - Keyword to search for in inventory.
-    Returns: List of matching items, sorted by name.
+    """Search inventory items by keyword across product names, descriptions, and SKUs.
+
+    Performs case-insensitive partial matching across multiple product fields to find
+    relevant inventory items. More flexible than items_by_name for discovery.
+
+    Parameters:
+        query (str): Search keyword (case-insensitive, use URL encoding for spaces)
+
+    Returns:
+        List of EnrichedInventoryItem objects matching the query, sorted by product name:
+        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
+        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+
+        Returns error message string if no matches found.
+
+    Example:
+        items = search_inventory("laptop")
+        # Returns all inventory items where "laptop" appears in name, description, or SKU
+        # Matches: "Laptop Pro 15", "Gaming Laptop", product with description "portable laptop"
+
+    Note:
+        - Case-insensitive partial matching
+        - Searches across: product name, description, and SKU fields
+        - URL-encode queries with spaces (e.g., "gaming%20laptop")
+        - Results sorted alphabetically by product name
+        - More flexible than items_by_name which requires exact match
     """
     return search_inventory(query)
 
 
 @mcp.tool(name="low_stock_items")
 def get_low_stock_items_tool() -> Union[List[EnrichedInventoryItem], str]:
-    """Get low stock inventory items."""
+    """Get all inventory items that are below their reorder point threshold.
+
+    Identifies items requiring restocking based on comparing quantity_on_hand
+    against the configured reorder_point for each item. Critical for inventory
+    management and procurement planning.
+
+    Parameters:
+        None
+
+    Returns:
+        List of EnrichedInventoryItem objects where quantity_on_hand <= reorder_point:
+        - Inventory fields: id, product_id, price, location_id, status, quantities, reorder_point
+        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+
+        Returns error message string if no low stock items found.
+
+    Example:
+        low_stock = low_stock_items()
+        # Returns items needing restocking, e.g., items with 5 units on hand and reorder_point of 10
+
+    Note:
+        - Items are flagged as low stock when: quantity_on_hand <= reorder_point
+        - Use this regularly to prevent stockouts
+        - Set appropriate reorder_point values when adding/updating inventory items
+        - Results help prioritize purchasing and restocking activities
+    """
     return get_low_stock_items()
 
 
@@ -851,21 +1141,110 @@ def delete_category_tool(name: str) -> Dict[str, int]:
 
 @mcp.tool(name="get_image")
 def get_image_tool(image_path: str) -> CallToolResult:
-    """Get image data and MIME type from a file."""
+    """Load an image file and return its contents as base64-encoded image content.
+
+    Reads image files from the filesystem and returns them in MCP ImageContent format
+    with automatic MIME type detection. Supports common image formats (PNG, JPEG, GIF, etc.).
+
+    Parameters:
+        image_path (str): Absolute or relative file path to the image file
+
+    Returns:
+        CallToolResult containing:
+        - isError: False if successful
+        - content: List with single ImageContent object containing:
+          - type: "image"
+          - data: Base64-encoded image data
+          - mimeType: Detected MIME type (e.g., "image/png", "image/jpeg")
+
+    Raises:
+        FileNotFoundError if image file doesn't exist
+        IOError if file cannot be read
+
+    Example:
+        result = get_image("/path/to/product-photo.png")
+        # Returns ImageContent with base64 data and mimeType="image/png"
+
+    Note:
+        - MIME type is auto-detected from file extension
+        - Image data is base64-encoded for safe transmission
+        - Used for displaying product images or visual content
+    """
     image_data, mime_type = get_image(image_path)
     return CallToolResult(isError=False, content=[ImageContent(type="image", data=image_data, mimeType=mime_type)])
 
 
 @mcp.tool(name="get_audio")
 def get_audio_tool(audio_path: str) -> CallToolResult:
-    """Get audio data and MIME type from a file."""
+    """Load an audio file and return its contents as base64-encoded audio content.
+
+    Reads audio files from the filesystem and returns them in MCP AudioContent format
+    with automatic MIME type detection. Supports common audio formats (MP3, WAV, OGG, etc.).
+
+    Parameters:
+        audio_path (str): Absolute or relative file path to the audio file
+
+    Returns:
+        CallToolResult containing:
+        - isError: False if successful
+        - content: List with single AudioContent object containing:
+          - type: "audio"
+          - data: Base64-encoded audio data
+          - mimeType: Detected MIME type (e.g., "audio/mpeg", "audio/wav")
+
+    Raises:
+        FileNotFoundError if audio file doesn't exist
+        IOError if file cannot be read
+
+    Example:
+        result = get_audio("/path/to/product-demo.mp3")
+        # Returns AudioContent with base64 data and mimeType="audio/mpeg"
+
+    Note:
+        - MIME type is auto-detected from file extension
+        - Audio data is base64-encoded for safe transmission
+        - Used for product demos, instructions, or audio content
+    """
     audio_data, mime_type = get_audio(audio_path)
     return CallToolResult(isError=False, content=[AudioContent(type="audio", data=audio_data, mimeType=mime_type)])
 
 
 @mcp.tool(name="get_file")
 def get_file_tool(file_path: str) -> CallToolResult:
-    """Loads a file and returns its contents as an embedded resource."""
+    """Load any file and return its contents as an embedded resource with base64 encoding.
+
+    Reads any file type from the filesystem and returns it as an MCP EmbeddedResource
+    with automatic MIME type detection. Use this for general file access (documents,
+    data files, etc.) when specific image/audio tools don't apply.
+
+    Parameters:
+        file_path (str): Absolute or relative file path to any file
+
+    Returns:
+        CallToolResult containing:
+        - isError: False if successful
+        - content: List with single EmbeddedResource object containing:
+          - type: "resource"
+          - resource: BlobResourceContents with:
+            - uri: File URI (e.g., "file:///path/to/file.pdf")
+            - blob: Base64-encoded file contents
+            - mimeType: Auto-detected MIME type or "application/octet-stream" if unknown
+
+    Raises:
+        FileNotFoundError if file doesn't exist
+        IOError if file cannot be read
+
+    Example:
+        result = get_file("/path/to/manual.pdf")
+        # Returns EmbeddedResource with base64 blob and mimeType="application/pdf"
+
+    Note:
+        - Handles any file type (PDFs, spreadsheets, text files, binary files, etc.)
+        - MIME type auto-detected from file extension
+        - Falls back to "application/octet-stream" for unknown types
+        - File contents are base64-encoded for safe transmission
+        - For images use get_image, for audio use get_audio (they provide optimized formats)
+    """
     with open(file_path, "rb") as file:
         file_data = file.read()
     encoded = base64.b64encode(file_data).decode("utf-8")
@@ -887,7 +1266,39 @@ def get_file_tool(file_path: str) -> CallToolResult:
 
 @mcp.tool()
 def get_content_uri_tool(content_uri: str) -> CallToolResult:
-    """Sends a content URI as an resource link."""
+    """Create a resource link for a content URI without loading the file contents.
+
+    Returns a ResourceLink reference to remote or local content via URI. Unlike get_file,
+    this doesn't load the file contents—it just creates a link reference. Useful for
+    referencing remote URLs, large files, or streaming content.
+
+    Parameters:
+        content_uri (str): URI to the content (URL, file://, or other URI scheme)
+
+    Returns:
+        CallToolResult containing:
+        - isError: False if successful
+        - content: List with single ResourceLink object containing:
+          - type: "resource_link"
+          - name: Extracted filename from URI (last path segment)
+          - uri: The provided content URI
+          - mimeType: Auto-detected from URI extension or "application/octet-stream"
+
+    Example:
+        result = get_content_uri("https://example.com/manual.pdf")
+        # Returns ResourceLink(name="manual.pdf", uri="https://...", mimeType="application/pdf")
+
+        result = get_content_uri("file:///local/video.mp4")
+        # Returns ResourceLink(name="video.mp4", uri="file://...", mimeType="video/mp4")
+
+    Note:
+        - Does NOT load file contents (unlike get_file)
+        - Creates a reference/link to content
+        - MIME type inferred from URI extension
+        - Supports any URI scheme (http://, https://, file://, etc.)
+        - Useful for remote resources, streaming, or avoiding large file transfers
+        - Name is extracted from the last segment of the URI path
+    """
     mime_type, _ = mimetypes.guess_type(content_uri)
     return CallToolResult(
         isError=False,
