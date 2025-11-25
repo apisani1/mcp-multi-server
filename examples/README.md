@@ -7,16 +7,14 @@ This directory contains comprehensive examples demonstrating how to use the `mcp
 ```
 examples/
 ├── servers/          # Example MCP server implementations
-│   ├── tool_server.py      # Server providing tools (member database)
-│   ├── resource_server.py  # Server providing resources (inventory management)
-│   └── prompt_server.py    # Server providing prompts (templates)
-├── clients/          # Example client implementations
-│   ├── chat_client.py      # Multi-server chat with OpenAI integration
-│   ├── tool_client.py      # Interactive tool exploration
-│   ├── resource_client.py  # Interactive resource browsing
-│   └── prompt_client.py    # Interactive prompt interface
+│   ├── tool_server.py      # Server providing tools (inventory CRUD operations)
+│   ├── resource_server.py  # Server providing resources (read-only inventory data)
+│   └── prompt_server.py    # Server providing prompts (inventory-focused templates)
+├── client/           # Example client implementation
+│   └── chat_client.py      # Multi-server chat with OpenAI integration
 ├── support/          # Supporting modules
-│   ├── inventory_db.py     # Inventory database for resource server
+│   ├── inventory_db.py     # Inventory database with pickle persistence
+│   ├── initialize_db.py    # Database initialization script
 │   └── media_handler.py    # Media file handling utilities
 ├── assets/           # Media assets for examples
 │   ├── picture.jpg
@@ -46,129 +44,173 @@ export OPENAI_API_KEY="your-api-key-here"
 
 ### 1. Tool Server ([tool_server.py](servers/tool_server.py))
 
-Demonstrates MCP tools with structured input/output using Pydantic models.
+Demonstrates MCP tools with full CRUD operations on an inventory database using Pydantic models.
 
 **Features:**
-- Member database management (add, get, list, remove members)
-- Complex structured data (Person model with addresses)
-- Media content (images, audio) in tool results
+- Complete inventory management (categories, suppliers, products, supplier-products, inventory items)
+- Complex structured data with relationships and enriched queries
+- Media content tools (images, audio, files, URIs)
+- Cascade delete operations
+- Statistical aggregations
 
 **Run the server:**
 ```bash
 python -m examples.servers.tool_server
 ```
 
-**Available Tools:**
-- `add_person` - Add a person to the member database
-- `get_person` - Get a person by ID
-- `list_persons` - List all members
-- `add_new_address` - Add an address to a member
-- `get_image` - Get image data from a file
-- `get_audio` - Get audio data from a file
+**Available Tools (34 total):**
+
+*Create Operations:*
+- `add_category` - Add a product category
+- `add_supplier` - Add a supplier with contact info
+- `add_product` - Add a product with details
+- `add_supplier_product` - Link supplier to product
+- `add_inventory_item` - Add inventory item at location
+
+*Read Operations:*
+- `inventory_overview` - Get full inventory statistics
+- `database_schema` - Get complete schema definition
+- `list_categories` - List all categories
+- `category_statistics` - Get category metrics
+- `products_by_category` - Get products in category
+- `items_by_category` - Get inventory items by category
+- `list_suppliers` - List all suppliers
+- `products_by_supplier` - Get products by supplier
+- `items_by_supplier` - Get inventory items by supplier
+- `supplier_products_by_supplier` - Get supplier-product relationships
+- `supplier_products_by_product` - Get suppliers for product
+- `list_products` - List all products
+- `items_by_name` - Find items by product name
+- `search_inventory` - Search inventory by keyword
+- `low_stock_items` - Get items below reorder point
+
+*Update Operations:*
+- `update_category` - Update category description
+- `update_supplier` - Update supplier information
+- `update_product` - Update product details
+- `update_supplier_product` - Update supplier-product relationship
+- `update_inventory_item` - Update inventory item
+
+*Delete Operations (with CASCADE):*
+- `delete_inventory_item` - Delete an inventory item
+- `delete_supplier_product` - Delete supplier-product link
+- `delete_product` - Delete product and related data
+- `delete_supplier` - Delete supplier and relationships
+- `delete_category` - Delete category and related data
+
+*Media & File Tools:*
+- `get_image` - Load image as base64-encoded content
+- `get_audio` - Load audio as base64-encoded content
+- `get_file` - Load file as embedded resource
+- `get_uri_content` - Create resource link for URI
 
 ### 2. Resource Server ([resource_server.py](servers/resource_server.py))
 
-Demonstrates MCP resources for exposing data and using URI templates.
+Demonstrates MCP resources for read-only data access with static resources and dynamic URI templates.
 
 **Features:**
-- Inventory management system
-- Static resources (overview, stats, items list)
-- Dynamic resources with parameters (by ID, by name, by category)
-- Resource templates with variable substitution
-- Search functionality
+- Read-only inventory data access (complements tool server's CRUD operations)
+- Static resources for common queries
+- Dynamic resource templates with parameter substitution
+- Structured data exposure via URIs
+- Same underlying database as tool server
 
 **Run the server:**
 ```bash
 python -m examples.servers.resource_server
 ```
 
-**Available Resources:**
-- `inventory://overview` - Inventory overview
-- `inventory://items` - All items
-- `inventory://stats` - Statistics
-- `inventory://low-stock` - Items needing reorder
-- `inventory://item/{item_id}` - Item by UUID (template)
-- `inventory://item/name/{item_name}` - Item by name (template)
-- `inventory://category/{category}` - Items by category (template)
-- `inventory://search/{query}` - Search items (template)
+**Available Resources (6 static):**
+- `inventory://overview` - Full inventory statistics and summary
+- `inventory://database-schema` - Complete schema definition
+- `inventory://categories` - List of all categories
+- `inventory://suppliers` - List of all suppliers
+- `inventory://products` - List of all products
+- `inventory://low-stock` - Items below reorder point
+
+**Available Resource Templates (7 dynamic):**
+- `inventory://category/stats/{category}` - Category-specific statistics
+- `inventory://category/products/{category}` - Products in category
+- `inventory://category/items/{category}` - Inventory items in category
+- `inventory://supplier/products/{supplier_name}` - Products by supplier
+- `inventory://supplier/items/{supplier_name}` - Inventory items by supplier
+- `inventory://product/item/{product_name}` - Items for product by name
+- `inventory://search/item/{query}` - Search inventory by keyword
 
 ### 3. Prompt Server ([prompt_server.py](servers/prompt_server.py))
 
-Demonstrates MCP prompts with parameters and media content.
+Demonstrates MCP prompts with various return types and media content handling.
 
 **Features:**
-- Parameterized prompts
-- Prompts returning conversation histories
-- Embedded images and audio in prompts
-- File loading and resource links
+- Text-based prompts for inventory operations
+- Multi-message conversation prompts
+- Media loading (images, audio) in prompt messages
+- File embedding and URI linking
+- Parameterized prompt templates
 
 **Run the server:**
 ```bash
 python -m examples.servers.prompt_server
 ```
 
-**Available Prompts:**
-- `write_detailed_historical_report` - Generate research report
-- `roleplay_scenario` - Set up a roleplay with optional media
-- `load_file` - Load a file as an embedded resource
-- `send_content_uri` - Send a content URI as a resource link
+**Available Prompts (7 total):**
 
-## Example Clients
+*Inventory-Specific Prompts:*
+- `category_promotion` - Generate prompt for category-wide discount pricing
+- `inventory_restock_brief` - Multi-message prompt for low-stock analysis
 
-### 1. Multi-Server Chat Client ([clients/chat_client.py](clients/chat_client.py))
+*Media Loading Prompts:*
+- `load_image` - Load image file as ImageContent in message
+- `load_audio` - Load audio file as AudioContent in message
+- `load_file` - Load any file as embedded BlobResource
+- `load_uri_content` - Create ResourceLink for content URI
 
-**PRIMARY EXAMPLE** - Full-featured chat interface integrating multiple MCP servers with OpenAI.
+## Example Client
+
+### Multi-Server Chat Client ([client/chat_client.py](client/chat_client.py))
+
+**PRIMARY EXAMPLE** - Full-featured chat interface integrating all three MCP servers with OpenAI.
 
 **Features:**
-- Connects to all configured servers
+- Automatically starts and connects to all configured servers
 - Converts MCP tools to OpenAI function calling format
-- Interactive prompt and resource insertion
+- Interactive prompt and resource insertion with special syntax
 - Template variable substitution
-- Tool call execution with automatic routing
+- Tool call execution with automatic routing to correct server
+- Comprehensive error handling and logging
 
 **Run the client:**
 ```bash
-# First, start all three servers in separate terminals
-python -m examples.servers.tool_server
-python -m examples.servers.resource_server
-python -m examples.servers.prompt_server
+# Easiest method - uses Makefile to auto-start servers
+make run-chat
 
-# Then run the chat client
-python -m examples.clients.chat_client
+# Or manually with poetry
+poetry run python3 -m examples.client.chat_client
+
+# Or manually with python (servers auto-start via mcp_servers.json)
+python -m examples.client.chat_client
 ```
 
 **Usage:**
-- Normal chat: Type your message
-- Insert prompt: `+prompt:write_detailed_historical_report`
-- Insert resource: `+resource:inventory://overview`
-- Insert template: `+template:inventory://item/{item_id}`
-- Type `exit` or `quit` to end
+- **Normal chat**: Type your message and press Enter
+- **Insert prompt**: Type `+prompt:category_promotion` to insert a prompt template
+- **Insert resource**: Type `+resource:inventory://overview` to insert resource data
+- **Insert template**: Type `+template:inventory://category/items/{category}` for parameterized resources
+- **Exit**: Type `exit` or `quit` to end the session
 
-### 2. Tool Client ([clients/tool_client.py](clients/tool_client.py))
-
-Interactive explorer for discovering and calling tools.
-
-**Run:**
-```bash
-python -m examples.clients.tool_client
+**Example Interactions:**
 ```
+> Show me the inventory overview
+[Uses inventory://overview resource to provide comprehensive statistics]
 
-### 3. Resource Client ([clients/resource_client.py](clients/resource_client.py))
+> What electronics products do we have?
+[Uses products_by_category tool with category="Electronics"]
 
-Interactive browser for listing and reading resources.
+> Find all low-stock items and recommend reorder quantities
+[Uses low_stock_items tool and analyzes results]
 
-**Run:**
-```bash
-python -m examples.clients.resource_client
-```
-
-### 4. Prompt Client ([clients/prompt_client.py](clients/prompt_client.py))
-
-Interactive interface for discovering and using prompts.
-
-**Run:**
-```bash
-python -m examples.clients.prompt_client
+> +prompt:category_promotion
+[Inserts the category promotion prompt template for you to fill in]
 ```
 
 ## Configuration
@@ -194,6 +236,19 @@ The [mcp_servers.json](mcp_servers.json) file defines the three example servers:
 }
 ```
 
+## Inventory Database
+
+The examples use a shared inventory database ([support/inventory_db.py](support/inventory_db.py)) that demonstrates:
+
+- **Five entity types**: Categories, Suppliers, Products, Supplier-Products, Inventory Items
+- **Relationships**: Products belong to categories, have suppliers, and have inventory at locations
+- **Persistence**: Automatic pickle-based persistence to `sample_db.pkl`
+- **Sample data**: Pre-populated with electronics, furniture, and clothing items
+- **Indexes**: Fast lookups by name, SKU, category, and supplier
+- **CRUD operations**: Full create, read, update, delete with cascade support
+
+The database is initialized with sample data on first run via [support/initialize_db.py](support/initialize_db.py).
+
 ## Using the Library in Your Code
 
 ### Basic Multi-Server Setup
@@ -212,7 +267,7 @@ async def main():
         print(f"Total tools: {len(tools.tools)}")
 
         # Call a tool (auto-routed to correct server)
-        result = await client.call_tool("list_persons", {})
+        result = await client.call_tool("list_products", {})
         print(result)
 
 asyncio.run(main())
@@ -233,7 +288,7 @@ async def chat():
 
         # Use with OpenAI
         openai_client = OpenAI()
-        messages = [{"role": "user", "content": "Add a new person named John Doe"}]
+        messages = [{"role": "user", "content": "Show me all products in the Electronics category"}]
 
         response = openai_client.chat.completions.create(
             model="gpt-4o",
@@ -251,12 +306,70 @@ async def chat():
                 print(f"Tool result: {result}")
 ```
 
+### Using Resources
+
+```python
+async def get_inventory_data():
+    async with MultiServerClient.from_config("examples/mcp_servers.json") as client:
+        # Read a static resource
+        overview = await client.read_resource("resource_server:inventory://overview")
+        print(f"Inventory overview: {overview}")
+
+        # Read a dynamic resource with template
+        electronics = await client.read_resource(
+            "resource_server:inventory://category/products/Electronics"
+        )
+        print(f"Electronics products: {electronics}")
+```
+
+### Using Prompts
+
+```python
+async def use_prompts():
+    async with MultiServerClient.from_config("examples/mcp_servers.json") as client:
+        # Get a text-based prompt
+        result = await client.get_prompt(
+            "category_promotion",
+            {"category": "Electronics", "discount_percentage": "20"}
+        )
+        print(f"Generated prompt: {result.messages[0].content}")
+
+        # Get a multi-message prompt
+        result = await client.get_prompt(
+            "inventory_restock_brief",
+            {"category": "Electronics", "min_stock": 10}
+        )
+        print(f"Multi-message prompt has {len(result.messages)} messages")
+```
+
 ## Learning Path
 
-1. **Start with the servers** - Understand how MCP servers expose capabilities
-2. **Try the simple clients** - See how to interact with individual capability types
-3. **Study the chat client** - Learn complete multi-server integration with OpenAI
-4. **Build your own** - Use these examples as templates for your servers and clients
+1. **Start with the chat client** - Run `make run-chat` to see the full system in action
+2. **Explore the servers** - Examine how each server exposes different capability types
+3. **Study the database** - Understand the inventory database structure and relationships
+4. **Review integrations** - See how tools/resources/prompts work with OpenAI
+5. **Build your own** - Use these examples as templates for your servers and clients
+
+## Quick Start
+
+The fastest way to see everything working:
+
+```bash
+# 1. Install dependencies
+poetry install --extras examples
+
+# 2. Set your OpenAI API key
+export OPENAI_API_KEY="your-key-here"
+
+# 3. Run the chat client (auto-starts all servers)
+make run-chat
+
+# 4. Try some queries
+> Show me the inventory overview
+> What electronics products do we have in stock?
+> Find all items below their reorder point
+> Add a new product category called "Office Supplies"
+```
 
 ## Common Patterns
 
