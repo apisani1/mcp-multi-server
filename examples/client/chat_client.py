@@ -5,6 +5,7 @@ to create a chat interface that can call tools, access resources, and use prompt
 from multiple MCP servers.
 """
 
+import argparse
 import asyncio
 import json
 import os
@@ -167,10 +168,10 @@ def convert_mcp_content_to_message(
 
     # Unknown content type
     content_block_text = str(content_block)
-    return content_block_text[:min(80, len(content_block_text))]
+    return content_block_text[: min(80, len(content_block_text))]
 
 
-def process_tool_result_content(tool_result: CallToolResult) -> str:
+def process_tool_result_content(tool_result: CallToolResult, verbose: bool = True) -> str:
     """Process tool result content blocks and convert to OpenAI tool response format.
 
     Args:
@@ -183,7 +184,8 @@ def process_tool_result_content(tool_result: CallToolResult) -> str:
 
     for content_block in tool_result.content:
         # Display to user (shows images and play audio locally)
-        handle_content_block(content_block)
+        if verbose:
+            handle_content_block(content_block)
         # Convert to OpenAI tool format (always returns dict with 'text' key)
         converted = convert_mcp_content_to_tool_response(content_block)
         text_parts.append(converted["text"])
@@ -278,7 +280,9 @@ async def search_and_instantiate_resource(
                         uri = uri_template
                 resource_result = await client.read_resource(uri=uri)
                 # Assuming single text message resource
-                return resource_result.contents[0].text if resource_result.contents else ""  # type: ignore[union-attr]
+                resource_result_text = resource_result.contents[0].text if resource_result.contents else ""
+                print(f"[Result] {resource_result_text}\n")
+                return resource_result_text
     return ""
 
 
@@ -300,11 +304,13 @@ def get_template_variables_from_user(uri_template: str) -> dict[str, str]:
     return values
 
 
-async def chat(config_path: str = "examples/mcp_servers.json") -> None:
+async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = True, model: str = "gpt-4o") -> None:
     """Run the multi-server chat interface.
 
     Args:
         config_path: Path to the server configuration file.
+        verbose: Enable verbose output for tool calls and results.
+        model: OpenAI model to use for chat completions.
     """
 
     assert os.getenv("OPENAI_API_KEY"), "Error: OPENAI_API_KEY not found in environment"
@@ -343,7 +349,8 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
                     if not prompt_messages:
                         print(f"Prompt '{prompt}' not found.")
                     else:
-                        print("****Retrieved prompt content (displayed above)\n")
+                        if verbose:
+                            print("****Retrieved prompt content (displayed above)\n")
                         # Add all prompt messages to conversation (supports multiple messages)
                         messages.extend(prompt_messages)
                     query = input("> ")
@@ -351,13 +358,12 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
 
                 if query.startswith("+resource:"):
                     resource_name = query[len("+resource:") :].strip()
-                    resource = await search_and_instantiate_resource(
-                        client, all_resources, resource_name  # type: ignore[arg-type]
-                    )
+                    resource = await search_and_instantiate_resource(client, all_resources, resource_name)
                     if not resource:
                         print(f"Resource '{resource_name}' not found.")
                     else:
-                        print(f"****Retrieved resource content:\n{resource}\n")
+                        if verbose:
+                            print("****Retrieved resource content (displayed above)\n")
                         messages.append({"role": "user", "content": resource})
                     query = input("> ")
                     continue
@@ -365,12 +371,13 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
                 if query.startswith("+template:"):
                     template_name = query[len("+template:") :].strip()
                     resource = await search_and_instantiate_resource(
-                        client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
+                        client, all_resource_templates, template_name, is_template=True
                     )
                     if not resource:
                         print(f"Resource Template '{template_name}' not found.")
                     else:
-                        print(f"****Instantiated template content:\n{resource}\n")
+                        if verbose:
+                            print("****Instantiated template content (displayed above)\n")
                         messages.append({"role": "user", "content": resource})
                     query = input("> ")
                     continue
@@ -379,7 +386,7 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
 
                 # Make OpenAI LLM call to answer the user query
                 response = openai_client.chat.completions.create(  # type: ignore[call-overload]
-                    model=MODEL,
+                    model=model,
                     messages=messages,
                     tools=openai_tools if openai_tools else None,
                     tool_choice="auto" if openai_tools else None,
@@ -393,8 +400,9 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
                         tool_name = tool_call.function.name
                         tool_args = json.loads(tool_call.function.arguments)
 
-                        print(f"\n[Tool Call] {tool_name}")
-                        print(f"[Arguments] {json.dumps(tool_args, indent=2)}")
+                        if verbose:
+                            print(f"****[Tool Call] {tool_name}")
+                            print(f"****[Arguments] {json.dumps(tool_args, indent=2)}")
 
                         # Execute tool via appropriate server
                         try:
@@ -402,7 +410,7 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
 
                             # Process tool result content (handles images, audio, text, etc.)
                             # Returns string content (images are converted to text descriptions)
-                            result_content = process_tool_result_content(tool_result)
+                            result_content = process_tool_result_content(tool_result, verbose=verbose)
 
                             # Add tool response to conversation
                             # Tool messages must always have string content (not arrays)
@@ -427,7 +435,7 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
 
                     # Get next response from LLM with tool results
                     response = openai_client.chat.completions.create(  # type: ignore[call-overload]
-                        model=MODEL,
+                        model=model,
                         messages=messages,
                         tools=openai_tools if openai_tools else None,
                         tool_choice="auto" if openai_tools else None,
@@ -447,5 +455,45 @@ async def chat(config_path: str = "examples/mcp_servers.json") -> None:
         traceback.print_exc()
 
 
+def main() -> None:
+    """Parse command-line arguments and run the chat client."""
+    parser = argparse.ArgumentParser(
+        description="Multi-server MCP chat client with OpenAI integration",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s
+  %(prog)s --config my_servers.json
+  %(prog)s --model gpt-4-turbo --no-verbose
+  %(prog)s -c custom.json -m gpt-3.5-turbo
+        """,
+    )
+
+    parser.add_argument(
+        "--config",
+        "-c",
+        default="examples/mcp_servers.json",
+        help="Path to MCP server configuration JSON file (default: %(default)s)",
+    )
+
+    parser.add_argument(
+        "--no-verbose",
+        "-q",
+        action="store_false",
+        dest="verbose",
+        help="Disable verbose output (tool calls and results)",
+    )
+
+    parser.add_argument(
+        "--model",
+        "-m",
+        default="gpt-4o",
+        help="OpenAI model to use (default: %(default)s)",
+    )
+
+    args = parser.parse_args()
+    asyncio.run(chat(config_path=args.config, verbose=args.verbose, model=args.model))
+
+
 if __name__ == "__main__":
-    asyncio.run(chat())
+    main()
