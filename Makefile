@@ -216,8 +216,9 @@ help-release:
 ######################
 
 # Run example client
+# Usage: make run-chat [ARGS="--model gpt-4-turbo --verbose"]
 run-chat:
-	@poetry run python3 -m examples.client.chat_client
+	@poetry run python3 -m examples.client.chat_client $(ARGS)
 
 # Run example servers (for testing)
 run-tool-server:
@@ -313,6 +314,7 @@ help:
 	@echo ''
 	@echo '  Convenience targets:'
 	@echo '  make run-chat             - Run MCP multi-server chat client (with OpenAI)'
+	@echo '                              Optional: ARGS="--verbose --model gpt-4-turbo"'
 	@echo '  make run-tool-server      - Run tool server (for testing)'
 	@echo '  make run-resource-server  - Run resource server (for testing)'
 	@echo '  make run-prompt-server    - Run prompt server (for testing)'

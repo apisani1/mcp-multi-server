@@ -304,7 +304,7 @@ def get_template_variables_from_user(uri_template: str) -> dict[str, str]:
     return values
 
 
-async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = True, model: str = "gpt-4o") -> None:
+async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = False, model: str = "gpt-4o") -> None:
     """Run the multi-server chat interface.
 
     Args:
@@ -464,8 +464,8 @@ def main() -> None:
 Examples:
   %(prog)s
   %(prog)s --config my_servers.json
-  %(prog)s --model gpt-4-turbo --no-verbose
-  %(prog)s -c custom.json -m gpt-3.5-turbo
+  %(prog)s --model gpt-4-turbo --verbose
+  %(prog)s -c custom.json -m gpt-3.5-turbo -v
         """,
     )
 
@@ -477,11 +477,10 @@ Examples:
     )
 
     parser.add_argument(
-        "--no-verbose",
-        "-q",
-        action="store_false",
-        dest="verbose",
-        help="Disable verbose output (tool calls and results)",
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose output (tool calls and results)",
     )
 
     parser.add_argument(
