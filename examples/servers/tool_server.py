@@ -1,5 +1,3 @@
-"""Example showing structured input and output with tools."""
-
 import base64
 import logging
 import mimetypes
@@ -296,7 +294,7 @@ def add_inventory_item_tool(  # pylint: disable=too-many-arguments,too-many-posi
         InventoryItem object with auto-generated UUID and timestamps
 
     Raises:
-        ValueError if product_id doesn't exist or price <= 0
+        ValueError if product_id doesn't exist or constraints are violated
 
     Example:
         add_inventory_item("550e8400-e29b-41d4-a716-446655440000", 1299.99,
@@ -423,9 +421,6 @@ def get_category_statistics_tool(category: str) -> CategoryStatistics:
         - items_by_product: Count of inventory items per product in category
         - product_percentages: Percentage distribution across products in category
 
-    Raises:
-        ValueError if category does not exist
-
     Example:
         stats = category_statistics("electronics")
         # Returns category-specific metrics for inventory planning
@@ -474,15 +469,16 @@ def get_products_by_category_tool(category: str) -> Union[List[Product], str]:
 def get_items_by_category_tool(category: str) -> Union[List[EnrichedInventoryItem], str]:
     """Get all inventory items in a specific category with enriched product details.
 
-    Returns inventory records with joined product information for items in the category.
+    Returns inventory records with joined product and supplier information for items in the category.
 
     Parameters:
         category (str): Category name to filter by (case-insensitive)
 
     Returns:
         List of EnrichedInventoryItem objects, each containing:
-        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
-        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+        - Inventory fields: id, price, location_id, status, quantities, last_restocked_at
+        - Product fields: product_id, name, category, description, sku, barcode, weight, dimensions
+        - Supplier fields: supplier_id, supplier_name, supplier_part_number, cost, profit_margin
 
         Returns error message string if category doesn't exist.
 
@@ -577,8 +573,9 @@ def get_items_by_supplier_tool(supplier_name: str) -> Union[List[EnrichedInvento
 
     Returns:
         List of EnrichedInventoryItem objects, each containing:
-        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
-        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+        - Inventory fields: id, price, location_id, status, quantities, last_restocked_at
+        - Product fields: product_id, name, category, description, sku, barcode, weight, dimensions
+        - Supplier fields: supplier_id, supplier_name, supplier_part_number, cost, profit_margin
 
         Returns error message string if supplier not found.
 
@@ -671,8 +668,9 @@ def get_items_by_name_tool(product_name: str) -> Union[List[EnrichedInventoryIte
 
     Returns:
         List of EnrichedInventoryItem objects (may contain multiple items for same product), each containing:
-        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
-        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+        - Inventory fields: id, price, location_id, status, quantities, last_restocked_at
+        - Product fields: product_id, name, category, description, sku, barcode, weight, dimensions
+        - Supplier fields: supplier_id, supplier_name, supplier_part_number, cost, profit_margin
 
         Returns error message string if no product with this exact name exists.
 
@@ -701,8 +699,9 @@ def search_inventory_tool(query: str) -> Union[List[EnrichedInventoryItem], str]
 
     Returns:
         List of EnrichedInventoryItem objects matching the query, sorted by product name:
-        - Inventory fields: id, product_id, price, location_id, status, quantities, timestamps
-        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+        - Inventory fields: id, price, location_id, status, quantities, last_restocked_at
+        - Product fields: product_id, name, category, description, sku, barcode, weight, dimensions
+        - Supplier fields: supplier_id, supplier_name, supplier_part_number, cost, profit_margin
 
         Returns error message string if no matches found.
 
@@ -734,10 +733,11 @@ def get_low_stock_items_tool() -> Union[List[EnrichedInventoryItem], str]:
 
     Returns:
         List of EnrichedInventoryItem objects where quantity_on_hand <= reorder_point:
-        - Inventory fields: id, product_id, price, location_id, status, quantities, reorder_point
-        - Product fields: product_name, category, description, sku, barcode, weight, dimensions
+        - Inventory fields: id, price, location_id, status, quantities, last_restocked_at
+        - Product fields: product_id, name, category, description, sku, barcode, weight, dimensions
+        - Supplier fields: supplier_id, supplier_name, supplier_part_number, cost, profit_margin
 
-        Returns error message string if no low stock items found.
+        Returns a confirmation string if no low stock items found.
 
     Example:
         low_stock = low_stock_items()
@@ -1025,6 +1025,9 @@ def delete_inventory_item_tool(inventory_item_id: str) -> str:
 
     Returns: Success message
 
+    Raises:
+        ValueError if inventory item does not exist
+
     Example:
         delete_inventory_item("123e4567-e89b-12d3-a456-426614174000")
     """
@@ -1044,6 +1047,9 @@ def delete_supplier_product_tool(supplier_product_id: str) -> str:
     to get valid relationship IDs.
 
     Returns: Success message
+
+    Raises:
+        ValueError if supplier-product relationship does not exist
 
     Example:
         delete_supplier_product("123e4567-e89b-12d3-a456-426614174000")
@@ -1073,6 +1079,9 @@ def delete_product_tool(product_id: str) -> Dict[str, int]:
             "deleted_product": 1
         }
 
+    Raises:
+        ValueError if product does not exist
+
     Example:
         delete_product("123e4567-e89b-12d3-a456-426614174000")
     """
@@ -1097,6 +1106,9 @@ def delete_supplier_tool(supplier_id: str) -> Dict[str, int]:
             "deleted_supplier_products": int,
             "deleted_supplier": 1
         }
+
+    Raises:
+        ValueError if supplier does not exist
 
     Example:
         delete_supplier("SUP-001")
@@ -1127,16 +1139,19 @@ def delete_category_tool(name: str) -> Dict[str, int]:
             "deleted_category": 1
         }
 
+    Raises:
+        ValueError if category does not exist
+
     Example:
         delete_category("electronics")
     """
     return db.delete_category(name)
 
 
-# Tools returning other types from media_handler for demonstration purposes
+# Tools returning non text types for tool demonstration purposes
 # Currently OpenAI function calling only supports text-based outputs and the
 # chat client example will just display the media content from the tool call
-# and send a text message acknowledging the media received.
+# and send a text message to the LLM acknowledging the media received.
 
 
 @mcp.tool(name="get_image")
@@ -1151,7 +1166,7 @@ def get_image_tool(image_path: str) -> CallToolResult:
 
     Returns:
         CallToolResult containing:
-        - isError: False if successful
+        - isError: False
         - content: List with single ImageContent object containing:
           - type: "image"
           - data: Base64-encoded image data
@@ -1186,7 +1201,7 @@ def get_audio_tool(audio_path: str) -> CallToolResult:
 
     Returns:
         CallToolResult containing:
-        - isError: False if successful
+        - isError: False
         - content: List with single AudioContent object containing:
           - type: "audio"
           - data: Base64-encoded audio data
@@ -1203,7 +1218,7 @@ def get_audio_tool(audio_path: str) -> CallToolResult:
     Note:
         - MIME type is auto-detected from file extension
         - Audio data is base64-encoded for safe transmission
-        - Used for product demos, instructions, or audio content
+        - Used for instructions or audio content
     """
     audio_data, mime_type = get_audio(audio_path)
     return CallToolResult(isError=False, content=[AudioContent(type="audio", data=audio_data, mimeType=mime_type)])
@@ -1222,7 +1237,7 @@ def get_file_tool(file_path: str) -> CallToolResult:
 
     Returns:
         CallToolResult containing:
-        - isError: False if successful
+        - isError: False
         - content: List with single EmbeddedResource object containing:
           - type: "resource"
           - resource: BlobResourceContents with:
@@ -1264,9 +1279,9 @@ def get_file_tool(file_path: str) -> CallToolResult:
     )
 
 
-@mcp.tool()
-def get_content_uri_tool(content_uri: str) -> CallToolResult:
-    """Create a resource link for a content URI without loading the file contents.
+@mcp.tool(name="get_uri_content")
+def get_uri_content_tool(content_uri: str) -> CallToolResult:
+    """Create a resource link for a content URI without loading the uri contents.
 
     Returns a ResourceLink reference to remote or local content via URI. Unlike get_file,
     this doesn't load the file contents—it just creates a link reference. Useful for
@@ -1277,7 +1292,7 @@ def get_content_uri_tool(content_uri: str) -> CallToolResult:
 
     Returns:
         CallToolResult containing:
-        - isError: False if successful
+        - isError: False
         - content: List with single ResourceLink object containing:
           - type: "resource_link"
           - name: Extracted filename from URI (last path segment)
