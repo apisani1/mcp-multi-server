@@ -88,6 +88,20 @@ def roleplay_scenario(
 
 
 @mcp.prompt()
+def load_image(file_path: str) -> List[Message]:
+    """Loads an image file and returns its contents as an image content."""
+    image_data, image_mime_type = get_image(file_path)
+    return [UserMessage(content=ImageContent(type="image", data=image_data, mimeType=image_mime_type))]
+
+
+@mcp.prompt()
+def load_audio(file_path: str) -> List[Message]:
+    """Loads an audio file and returns its contents as an audio content."""
+    audio_data, audio_mime_type = get_audio(file_path)
+    return [UserMessage(content=AudioContent(type="audio", data=audio_data, mimeType=audio_mime_type))]
+
+
+@mcp.prompt()
 def load_file(file_path: str) -> List[Message]:
     """Loads a file and returns its contents as an embedded resource."""
     with open(file_path, "rb") as file:
@@ -109,7 +123,7 @@ def load_file(file_path: str) -> List[Message]:
 
 
 @mcp.prompt()
-def send_content_uri(content_uri: str) -> List[Message]:
+def load_uri_content(content_uri: str) -> List[Message]:
     """Sends a content URI as an resource link."""
     mime_type, _ = mimetypes.guess_type(content_uri)
     return [
