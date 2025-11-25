@@ -280,7 +280,7 @@ async def search_and_instantiate_resource(
                         uri = uri_template
                 resource_result = await client.read_resource(uri=uri)
                 # Assuming single text message resource
-                resource_result_text = resource_result.contents[0].text if resource_result.contents else ""
+                resource_result_text = resource_result.contents[0].text if resource_result.contents else ""  # type: ignore[union-attr]
                 print(f"[Result] {resource_result_text}\n")
                 return resource_result_text
     return ""
@@ -358,7 +358,7 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
                 if query.startswith("+resource:"):
                     resource_name = query[len("+resource:") :].strip()
-                    resource = await search_and_instantiate_resource(client, all_resources, resource_name)
+                    resource = await search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
                     if not resource:
                         print(f"Resource '{resource_name}' not found.")
                     else:
@@ -371,7 +371,7 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
                 if query.startswith("+template:"):
                     template_name = query[len("+template:") :].strip()
                     resource = await search_and_instantiate_resource(
-                        client, all_resource_templates, template_name, is_template=True
+                        client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
                     )
                     if not resource:
                         print(f"Resource Template '{template_name}' not found.")
