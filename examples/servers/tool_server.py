@@ -1,9 +1,11 @@
 """Example showing structured input and output with tools."""
 
+import base64
 import logging
+import mimetypes
 from datetime import datetime
 from decimal import Decimal
-from typing import (  # Optional,; TypedDict,
+from typing import (
     Dict,
     List,
     Optional,
@@ -16,6 +18,9 @@ from mcp.types import (
     AudioContent,
     CallToolResult,
     ImageContent,
+    EmbeddedResource,
+    BlobResourceContents,
+    ResourceLink,
 )
 
 
@@ -856,6 +861,45 @@ def get_audio_tool(audio_path: str) -> CallToolResult:
     """Get audio data and MIME type from a file."""
     audio_data, mime_type = get_audio(audio_path)
     return CallToolResult(isError=False, content=[AudioContent(type="audio", data=audio_data, mimeType=mime_type)])
+
+
+@mcp.tool(name="get_file")
+def get_file_tool(file_path: str) -> CallToolResult:
+    """Loads a file and returns its contents as an embedded resource."""
+    with open(file_path, "rb") as file:
+        file_data = file.read()
+    encoded = base64.b64encode(file_data).decode("utf-8")
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return CallToolResult(
+        isError=False,
+        content=[
+            EmbeddedResource(
+                type="resource",
+                resource=BlobResourceContents(
+                    uri=f"file://{file_path}",  # type: ignore[arg-type]
+                    blob=encoded,
+                    mimeType=mime_type or "application/octet-stream",
+                ),
+            )
+        ],
+    )
+
+
+@mcp.tool()
+def get_content_uri_tool(content_uri: str) -> CallToolResult:
+    """Sends a content URI as an resource link."""
+    mime_type, _ = mimetypes.guess_type(content_uri)
+    return CallToolResult(
+        isError=False,
+        content=[
+            ResourceLink(
+                type="resource_link",
+                name=content_uri.split("/")[-1],
+                uri=content_uri,  # type: ignore[arg-type]
+                mimeType=mime_type or "application/octet-stream",
+            )
+        ],
+    )
 
 
 if __name__ == "__main__":
