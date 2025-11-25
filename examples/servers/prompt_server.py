@@ -1,9 +1,6 @@
 import base64
 import mimetypes
-from typing import (
-    List,
-    Optional,
-)
+from typing import List
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.prompts.base import (
@@ -37,59 +34,10 @@ mcp = FastMCP("Inventory Prompt Server")
 
 
 @mcp.prompt()
-def write_detailed_historical_report(topic: str, number_of_paragraphs: int) -> str:
-    """
-    Writes a detailed historical report
-    Args:
-        topic: the topic to do research on
-        number_of_paragraphs: the number of paragraphs that the main body should be
-    """
-
-    prompt = """
-    Create a concise research report on the history of {topic}.
-    The report should contain 3 sections: INTRODUCTION, MAIN, and CONCLUSION.
-    The MAIN section should be {number_of_paragraphs} paragraphs long.
-    Include a timeline of key events.
-    The conclusion should be in bullet points format.
-    """
-
-    prompt = prompt.format(topic=topic, number_of_paragraphs=number_of_paragraphs)
-
-    return prompt
-
-
-@mcp.prompt()
-def roleplay_scenario(
-    character: str,
-    situation: str,
-    additional_message: Optional[str] = None,
-    image_path: Optional[str] = None,
-    audio_path: Optional[str] = None,
-) -> List[Message]:
-    """Sets up a roleplaying scenario with initial messages."""
-
-    messages = [
-        UserMessage(content=f"Let's roleplay. You are {character}. The situation is: {situation}"),
-        AssistantMessage(content="Okay, I understand. I am ready. What happens next?"),
-    ]
-
-    if additional_message:
-        messages.append(UserMessage(content=TextContent(type="text", text=additional_message)))
-
-    if image_path:
-        image_data, image_mime_type = get_image(image_path)
-        messages.append(UserMessage(content=ImageContent(type="image", data=image_data, mimeType=image_mime_type)))
-
-    if audio_path:
-        audio_data, audio_mime_type = get_audio(audio_path)
-        messages.append(UserMessage(content=AudioContent(type="audio", data=audio_data, mimeType=audio_mime_type)))
-
-    return messages
-
-
-@mcp.prompt()
 def category_promotion(category: str, discount_percentage: str) -> str:
-    """Creates a prompt to reduce the price of all products for a product category.
+    """Creates a prompt that returns a text-based response.
+    The prompt requests a list of products in a given category with updated prices
+    after applying a specified discount percentage.
     Args:
         category: the product category to promote
         discount_percentage: the discount percentage to offer
@@ -97,13 +45,38 @@ def category_promotion(category: str, discount_percentage: str) -> str:
 
     prompt = """
     Find all inventory items for products in the {category} category.
-    Update the prices of all of the above inventroy item by reducing them by a {discount_percentage}%run.
+    Update the prices of all of the above inventory item by reducing them by a {discount_percentage}%.
+    List the updated products names and their new prices.
     """
 
     return prompt.format(
         category=category,
         discount_percentage=discount_percentage,
     )
+
+
+@mcp.prompt()
+def inventory_restock_brief(category: str, min_stock: int) -> List[Message]:
+    """Generates a multi-message prompt.
+    The prompt requests a list of products in a given category and recommended restock amounts for low inventory items.
+    Args:
+        category: the product category to check
+        min_stock: the minimum stock level to flag for restocking
+    """
+    return [
+        UserMessage(content=f"Consult the inventory database and list every product in the {category} category."),
+        AssistantMessage(content="Only show the information requested in the next message."),
+        UserMessage(
+            content=TextContent(
+                type="text",
+                text=(
+                    f"""For each product returned, checks the inventory items associated and display the folling
+                    information: name, SKU, on-hand quantity, and supplier.
+                    Flag entries where quantity is below {min_stock} units and recommend a restock amount."""
+                ),
+            ),
+        ),
+    ]
 
 
 @mcp.prompt()
