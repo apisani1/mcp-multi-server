@@ -9,7 +9,7 @@ examples/
 ├── servers/          # Example MCP server implementations
 │   ├── tool_server.py      # Server providing tools (inventory CRUD operations)
 │   ├── resource_server.py  # Server providing resources (read-only inventory data)
-│   └── prompt_server.py    # Server providing prompts (inventory-focused templates)
+│   └── prompt_server.py    # Server providing prompts (inventory-focused prompt templates)
 ├── client/           # Example client implementation
 │   └── chat_client.py      # Multi-server chat with OpenAI integration
 ├── support/          # Supporting modules
