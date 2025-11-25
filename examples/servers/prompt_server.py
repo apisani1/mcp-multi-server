@@ -33,7 +33,7 @@ except ImportError:
     )
 
 
-mcp = FastMCP("My Prompts")
+mcp = FastMCP("Inventory Prompt Server")
 
 
 @mcp.prompt()
@@ -88,6 +88,25 @@ def roleplay_scenario(
 
 
 @mcp.prompt()
+def category_promotion(category: str, discount_percentage: str) -> str:
+    """Creates a prompt to reduce the price of all products for a product category.
+    Args:
+        category: the product category to promote
+        discount_percentage: the discount percentage to offer
+    """
+
+    prompt = """
+    Find all inventory items for products in the {category} category.
+    Update the prices of all of the above inventroy item by reducing them by a {discount_percentage}%run.
+    """
+
+    return prompt.format(
+        category=category,
+        discount_percentage=discount_percentage,
+    )
+
+
+@mcp.prompt()
 def load_image(file_path: str) -> List[Message]:
     """Loads an image file and returns its contents as an image content."""
     image_data, image_mime_type = get_image(file_path)
@@ -139,5 +158,5 @@ def load_uri_content(content_uri: str) -> List[Message]:
 
 
 if __name__ == "__main__":
-    print("Starting MCP PromptServer...")
+    print("Starting MCP Prompt Server...")
     mcp.run()
