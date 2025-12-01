@@ -31,6 +31,13 @@ Examples:
     >>> tools = client.list_tools()
     >>> openai_tools = mcp_tools_to_openai_format(tools.tools)
 
+    Configuring logging:
+    >>> from mcp_multi_server import configure_logging
+    >>> configure_logging(level="DEBUG")  # Enable debug logging
+    >>> # Or use Python's logging module directly:
+    >>> import logging
+    >>> logging.getLogger("mcp_multi_server").setLevel(logging.DEBUG)
+
 See Also:
     - MCP Protocol Documentation: https://modelcontextprotocol.io
     - GitHub Repository: https://github.com/apisani1/mcp-multi-server
@@ -46,6 +53,7 @@ from .config import (
 )
 from .types import ServerCapabilities
 from .utils import (
+    configure_logging,
     extract_template_variables,
     format_namespace_uri,
     mcp_tools_to_openai_format,
@@ -63,6 +71,7 @@ __all__ = [
     # Type definitions
     "ServerCapabilities",
     # Utility functions
+    "configure_logging",
     "mcp_tools_to_openai_format",
     "format_namespace_uri",
     "parse_namespace_uri",

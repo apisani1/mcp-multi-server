@@ -1,11 +1,13 @@
 """Utility functions for MCP multi-server client."""
 
+import logging
 import re
 from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
     List,
+    Optional,
     Union,
 )
 from urllib.parse import quote
@@ -17,6 +19,68 @@ from mcp.types import Tool
 
 if TYPE_CHECKING:
     from mcp_multi_server.client import MultiServerClient
+
+
+def configure_logging(
+    level: str = "INFO",
+    format: Optional[str] = None,
+    datefmt: Optional[str] = None,
+) -> None:
+    """Configure logging for the mcp_multi_server library.
+
+    This function provides a convenient way to configure logging for the library.
+    It sets the log level for all mcp_multi_server loggers.
+
+    Note:
+        For more control, users can configure logging directly using Python's
+        logging module in their application code.
+
+    Args:
+        level: Log level as a string (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+               Defaults to "INFO".
+        format: Optional custom format string for log messages.
+                If not provided, uses Python's default format.
+        datefmt: Optional custom date format string.
+                 Only used if format is also provided.
+
+    Examples:
+        Basic usage - set log level to DEBUG:
+        >>> from mcp_multi_server import configure_logging
+        >>> configure_logging(level="DEBUG")
+
+        Custom format:
+        >>> configure_logging(
+        ...     level="INFO",
+        ...     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        ...     datefmt="%Y-%m-%d %H:%M:%S"
+        ... )
+
+        Using standard logging module for more control:
+        >>> import logging
+        >>> logging.getLogger("mcp_multi_server").setLevel(logging.DEBUG)
+        >>> # Or configure entire app:
+        >>> logging.basicConfig(level=logging.DEBUG)
+    """
+    # Get the root logger for this library
+    library_logger = logging.getLogger("mcp_multi_server")
+
+    # Set the log level
+    log_level = getattr(logging, level.upper(), logging.INFO)
+    library_logger.setLevel(log_level)
+
+    # If a custom format is provided, add a handler with that format
+    if format:
+        # Remove existing handlers to avoid duplicates
+        library_logger.handlers.clear()
+
+        # Create new handler with custom format
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(format, datefmt=datefmt)
+        handler.setFormatter(formatter)
+        library_logger.addHandler(handler)
+
+        # Prevent propagation to root logger to avoid duplicate messages
+        library_logger.propagate = False
 
 
 def print_capabilities_summary(client: "MultiServerClient") -> None:

@@ -49,14 +49,11 @@ from .utils import (
 )
 
 
-# Configure logger for this module
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(message)-60s %(filename)s:%(lineno)d",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Get logger for this module
+# Note: Logging configuration should be done by the application using this library.
+# Users can configure logging in their application code, or use the configure_logging()
+# function provided by this library.
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class MultiServerClient:
