@@ -18,7 +18,7 @@ class ServerConfig(BaseModel):
     Examples:
         >>> config = ServerConfig(
         ...     command="python",
-        ...     args=["-m", "my_mcp_server.tool_server"]
+        ...     args=["-m", "mcp_servers.tool_server"]
         ... )
     """
 
@@ -37,11 +37,11 @@ class MCPServersConfig(BaseModel):
         >>> config = MCPServersConfig(mcpServers={
         ...     "tool_server": ServerConfig(
         ...         command="python",
-        ...         args=["-m", "my_mcp_server.tool_server"]
+        ...         args=["-m", "mcp_servers.tool_server"]
         ...     ),
         ...     "resource_server": ServerConfig(
         ...         command="python",
-        ...         args=["-m", "my_mcp_server.resource_server"]
+        ...         args=["-m", "mcp_servers.resource_server"]
         ...     )
         ... })
     """
