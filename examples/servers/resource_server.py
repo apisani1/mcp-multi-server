@@ -29,7 +29,7 @@ except ImportError:
         db,
     )
 
-
+# Initialize FastMCP server
 mcp = FastMCP("Inventory Resource Server")
 
 

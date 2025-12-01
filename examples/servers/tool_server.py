@@ -1,5 +1,4 @@
 import base64
-import logging
 import mimetypes
 from datetime import datetime
 from decimal import Decimal
@@ -86,9 +85,6 @@ except ImportError:
         get_audio,
         get_image,
     )
-
-# Suppress MCP library INFO logs
-logging.getLogger("mcp").setLevel(logging.WARNING)
 
 # Create server
 mcp = FastMCP("Inventory Tool Server")

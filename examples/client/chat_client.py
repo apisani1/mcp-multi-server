@@ -8,6 +8,7 @@ from multiple MCP servers.
 import argparse
 import asyncio
 import json
+import logging
 import os
 import traceback
 from typing import (
@@ -41,6 +42,7 @@ from mcp.types import (
 )
 from mcp_multi_server import MultiServerClient
 from mcp_multi_server.utils import (
+    configure_logging,
     extract_template_variables,
     mcp_tools_to_openai_format,
     print_capabilities_summary,
@@ -317,6 +319,9 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
     try:
         async with MultiServerClient.from_config(config_path) as client:
+
+            configure_logging(level="INFO" if verbose else "WARNING")
+            logging.getLogger("mcp").setLevel(logging.INFO if verbose else logging.WARNING)
 
             # Print capabilities summary
             print_capabilities_summary(client)

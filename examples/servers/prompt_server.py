@@ -30,6 +30,7 @@ except ImportError:
     )
 
 
+# Create server
 mcp = FastMCP("Inventory Prompt Server")
 
 
