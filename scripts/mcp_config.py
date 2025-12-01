@@ -91,8 +91,8 @@ def create_or_update_config(server_name: str, filename: str, config_file: Path) 
         if "mcpServers" not in config_data:
             config_data["mcpServers"] = {}
 
-        # Convert filename to module name (remove .py extension)
-        module_name = filename.replace(".py", "")
+        # Convert filename to module name (remove .py extension and convert path separators to dots)
+        module_name = filename.replace(".py", "").replace("/", ".").replace("\\", ".")
 
         # Get absolute paths for portability
         poetry_cmd = find_poetry_command()
@@ -107,7 +107,7 @@ def create_or_update_config(server_name: str, filename: str, config_file: Path) 
                 project_dir,
                 "python3",
                 "-m",
-                f"src.mcp_multi_server.{module_name}",
+                f"{module_name}",
             ],
         }
 
