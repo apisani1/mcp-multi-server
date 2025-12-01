@@ -136,7 +136,6 @@ def main(default_config_file: str = "mcp_servers.json") -> None:
     config_file_name = sys.argv[2] if len(sys.argv) > 2 else default_config_file
 
     src_path = Path(filename)
-
     if not src_path.exists():
         print(f"Error: File {src_path} not found")
         sys.exit(1)
