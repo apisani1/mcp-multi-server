@@ -46,6 +46,7 @@ from .config import (
 )
 from .types import ServerCapabilities
 from .utils import (
+    configure_logging,
     format_namespace_uri,
     parse_namespace_uri,
 )
@@ -358,8 +359,21 @@ class MultiServerClient:
         Examples:
             >>> await MultiServerClient.set_logging_level("debug")
         """
-        for session in self.sessions.values():
-            await session.set_logging_level(level=level)
+        if level not in {"debug", "info", "warning", "error", "critical"}:
+            raise ValueError(
+                f""""
+                Invalid logging level: {level}.
+                See: https://modelcontextprotocol.github.io/python-sdk/api/#mcp.ClientSession.set_logging_level")
+            """
+            )
+        for server, session in self.sessions.items():
+            try:
+                await session.set_logging_level(level=level)
+            except Exception:
+                # Most likely the server doesn't support logging level changes
+                # See https://github.com/jlowin/fastmcp/issues/525
+                logger.warning("Failed to set logging level for server '%s'", server)
+        configure_logging(name="mcp_multi_server", level=level.upper())
         return EmptyResult()
 
     def list_tools(self, cursor: Optional[str] = None) -> ListToolsResult:
