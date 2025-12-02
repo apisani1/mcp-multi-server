@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 
 def configure_logging(
+    name: str = "mcp_multi_server",
     level: str = "INFO",
     format: Optional[str] = None,
     datefmt: Optional[str] = None,
@@ -60,23 +61,21 @@ def configure_logging(
         >>> # Or configure entire app:
         >>> logging.basicConfig(level=logging.DEBUG)
     """
-    log_level = getattr(logging, level.upper(), logging.INFO)
 
     # Ensure root logger has a handler configured
     root_logger = logging.getLogger()
     if not root_logger.handlers:
         # No handlers configured yet, set up basic configuration
         logging.basicConfig(
-            level=log_level,
+            level=logging.INFO,
             format=format or "%(asctime)s [%(levelname)-8s] %(name)s - %(message)s",
             datefmt=datefmt or "%Y-%m-%d %H:%M:%S",
         )
 
     # Set the log level
-    library_logger = logging.getLogger("mcp_multi_server")
+    log_level = getattr(logging, level.upper(), logging.INFO)
+    library_logger = logging.getLogger(name)
     library_logger.setLevel(log_level)
-    logging.getLogger("mcp").setLevel(log_level)
-    root_logger.setLevel(log_level)
 
 
 def print_capabilities_summary(client: "MultiServerClient") -> None:

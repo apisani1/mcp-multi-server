@@ -19,6 +19,7 @@ from mcp.types import (
     ImageContent,
     ResourceLink,
 )
+from mcp_multi_server.utils import configure_logging
 
 
 try:
@@ -88,6 +89,12 @@ except ImportError:
 
 # Create server
 mcp = FastMCP("Inventory Tool Server")
+
+
+@mcp._mcp_server.set_logging_level()
+async def set_logging_level(level: str) -> None:
+    configure_logging(name="mcp", level=level)
+
 
 # ==============================================================================
 # CREATE Tools - Data Insertion Operations

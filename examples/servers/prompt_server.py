@@ -16,6 +16,7 @@ from mcp.types import (
     ResourceLink,
     TextContent,
 )
+from mcp_multi_server.utils import configure_logging
 
 
 try:
@@ -32,6 +33,11 @@ except ImportError:
 
 # Create server
 mcp = FastMCP("Inventory Prompt Server")
+
+
+@mcp._mcp_server.set_logging_level()
+async def set_logging_level(level: str) -> None:
+    configure_logging(name="mcp", level=level)
 
 
 @mcp.prompt()

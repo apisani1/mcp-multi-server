@@ -6,6 +6,7 @@ from typing import (
 from urllib.parse import unquote
 
 from mcp.server.fastmcp import FastMCP
+from mcp_multi_server.utils import configure_logging
 
 
 try:
@@ -31,6 +32,11 @@ except ImportError:
 
 # Initialize FastMCP server
 mcp = FastMCP("Inventory Resource Server")
+
+
+@mcp._mcp_server.set_logging_level()
+async def set_logging_level(level: str) -> None:
+    configure_logging(name="mcp", level=level)
 
 
 @mcp.resource("inventory://overview")

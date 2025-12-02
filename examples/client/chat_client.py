@@ -321,6 +321,8 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
     try:
         async with MultiServerClient.from_config(config_path) as client:
 
+            await client.set_logging_level(level="info" if verbose else "warning")
+
             # Print capabilities summary
             print_capabilities_summary(client)
 

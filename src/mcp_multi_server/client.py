@@ -24,12 +24,14 @@ from mcp.shared.exceptions import McpError
 from mcp.shared.session import ProgressFnT
 from mcp.types import (
     CallToolResult,
+    EmptyResult,
     ErrorData,
     GetPromptResult,
     ListPromptsResult,
     ListResourcesResult,
     ListResourceTemplatesResult,
     ListToolsResult,
+    LoggingLevel,
     Prompt,
     ReadResourceResult,
     Resource,
@@ -346,6 +348,19 @@ class MultiServerClient:
             logger.warning("[%s] No prompts available: %s", server_name, e)
 
         self.capabilities[server_name] = capabilities
+
+    async def set_logging_level(self, level: LoggingLevel) -> EmptyResult:
+        """Set the logging level for the multi-server client library.
+
+        Args:
+            level: Logging level as a string in lower case (e.g., "debug", "info", "warning", "error", "critical").
+
+        Examples:
+            >>> await MultiServerClient.set_logging_level("debug")
+        """
+        for session in self.sessions.values():
+            await session.set_logging_level(level=level)
+        return EmptyResult()
 
     def list_tools(self, cursor: Optional[str] = None) -> ListToolsResult:
         """Get combined list of all tools from all servers.
