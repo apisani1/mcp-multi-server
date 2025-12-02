@@ -8,7 +8,6 @@ from multiple MCP servers.
 import argparse
 import asyncio
 import json
-import logging
 import os
 import traceback
 from typing import (
@@ -317,11 +316,10 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
     assert os.getenv("OPENAI_API_KEY"), "Error: OPENAI_API_KEY not found in environment"
 
+    configure_logging(level="INFO" if verbose else "WARNING")
+
     try:
         async with MultiServerClient.from_config(config_path) as client:
-
-            configure_logging(level="INFO" if verbose else "WARNING")
-            logging.getLogger("mcp").setLevel(logging.INFO if verbose else logging.WARNING)
 
             # Print capabilities summary
             print_capabilities_summary(client)
