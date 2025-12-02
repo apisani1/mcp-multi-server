@@ -32,6 +32,7 @@ from mcp.types import (
     ListResourceTemplatesResult,
     ListToolsResult,
     LoggingLevel,
+    PaginatedRequestParams,
     Prompt,
     ReadResourceResult,
     Resource,
@@ -309,7 +310,7 @@ class MultiServerClient:
                 self.tool_to_server[tool.name] = server_name
 
         except Exception as e:
-            logger.warning("[%s] No tools available: %s", server_name, e)
+            logger.warning("Error while listing tools from [%s] : %s", server_name, e)
 
         # Get resources
         try:
@@ -317,7 +318,7 @@ class MultiServerClient:
             capabilities.resources = resources_result
             logger.info("[%s] Found %d resource(s)", server_name, len(resources_result.resources))
         except Exception as e:
-            logger.warning("[%s] No resources available: %s", server_name, e)
+            logger.warning("Error while listing resources from [%s] : %s", server_name, e)
 
         # Get resource templates
         try:
@@ -325,7 +326,7 @@ class MultiServerClient:
             capabilities.resource_templates = templates_result
             logger.info("[%s] Found %d resource template(s)", server_name, len(templates_result.resourceTemplates))
         except Exception as e:
-            logger.warning("[%s] No resource templates available: %s", server_name, e)
+            logger.warning("Error while listing resource templates from [%s] : %s", server_name, e)
 
         # Get prompts
         try:
@@ -346,15 +347,16 @@ class MultiServerClient:
                 self.prompt_to_server[prompt.name] = server_name
 
         except Exception as e:
-            logger.warning("[%s] No prompts available: %s", server_name, e)
+            logger.warning("Error while listing prompts from [%s] : %s", server_name, e)
 
         self.capabilities[server_name] = capabilities
 
     async def set_logging_level(self, level: LoggingLevel) -> EmptyResult:
-        """Set the logging level for the multi-server client library.
+        """Set the logging level for the multi-server client and the MCP connected servers.
 
         Args:
-            level: Logging level as a string in lower case (e.g., "debug", "info", "warning", "error", "critical").
+            level: Logging level as a string in lower case (e.g., "debug", "info", "warning", "error", "critical") as
+                defined in MCP LoggingLevel.
 
         Examples:
             >>> await MultiServerClient.set_logging_level("debug")
@@ -366,17 +368,19 @@ class MultiServerClient:
                 See: https://modelcontextprotocol.github.io/python-sdk/api/#mcp.ClientSession.set_logging_level")
             """
             )
-        for server, session in self.sessions.items():
+        for server_name, session in self.sessions.items():
             try:
                 await session.set_logging_level(level=level)
             except Exception:
                 # Most likely the server doesn't support logging level changes
                 # See https://github.com/jlowin/fastmcp/issues/525
-                logger.warning("Failed to set logging level for server '%s'", server)
+                logger.warning("Failed to set logging level for server '%s'", server_name)
         configure_logging(name="mcp_multi_server", level=level.upper())
         return EmptyResult()
 
-    def list_tools(self, cursor: Optional[str] = None) -> ListToolsResult:
+    def list_tools(
+        self, cursor: Optional[str] = None, *, params: Optional[PaginatedRequestParams] = None
+    ) -> ListToolsResult:
         """Get combined list of all tools from all servers.
 
         This method mimics the MCP ClientSession.list_tools() signature but aggregates
@@ -385,6 +389,8 @@ class MultiServerClient:
 
         Args:
             cursor: Optional pagination cursor. Not supported for multi-server aggregation,
+                must be None if provided.
+            params: Optional PaginatedRequestParams. Not supported for multi-server aggregation,
                 must be None if provided.
 
         Returns:
@@ -400,7 +406,7 @@ class MultiServerClient:
             ...     server = tool.meta.get("serverName") if tool.meta else None
             ...     print(f"{tool.name} from {server}")
         """
-        if cursor is not None:
+        if cursor is not None or params is not None:
             raise ValueError("Pagination not supported for multi-server aggregation")
 
         all_tools: List[Tool] = []
@@ -414,7 +420,9 @@ class MultiServerClient:
 
         return ListToolsResult(tools=all_tools, nextCursor=None)
 
-    def list_prompts(self, cursor: Optional[str] = None) -> ListPromptsResult:
+    def list_prompts(
+        self, cursor: Optional[str] = None, *, params: Optional[PaginatedRequestParams] = None
+    ) -> ListPromptsResult:
         """Get combined list of all prompts from all servers.
 
         This method mimics the MCP ClientSession.list_prompts() signature but aggregates
@@ -423,6 +431,8 @@ class MultiServerClient:
 
         Args:
             cursor: Optional pagination cursor. Not supported for multi-server aggregation,
+                must be None if provided.
+            params: Optional PaginatedRequestParams. Not supported for multi-server aggregation,
                 must be None if provided.
 
         Returns:
@@ -438,7 +448,7 @@ class MultiServerClient:
             ...     server = prompt.meta.get("serverName") if prompt.meta else None
             ...     print(f"{prompt.name} from {server}")
         """
-        if cursor is not None:
+        if cursor is not None or params is not None:
             raise ValueError("Pagination not supported for multi-server aggregation")
 
         all_prompts: List[Prompt] = []
@@ -452,7 +462,13 @@ class MultiServerClient:
 
         return ListPromptsResult(prompts=all_prompts, nextCursor=None)
 
-    def list_resources(self, cursor: Optional[str] = None, use_namespace: bool = True) -> ListResourcesResult:
+    def list_resources(
+        self,
+        cursor: Optional[str] = None,
+        *,
+        params: Optional[PaginatedRequestParams] = None,
+        use_namespace: bool = True,
+    ) -> ListResourcesResult:
         """Get combined list of all resources from all servers.
 
         This method mimics the MCP ClientSession.list_resources() signature but aggregates
@@ -462,6 +478,8 @@ class MultiServerClient:
 
         Args:
             cursor: Optional pagination cursor. Not supported for multi-server aggregation,
+                must be None if provided.
+            params: Optional PaginatedRequestParams. Not supported for multi-server aggregation,
                 must be None if provided.
             use_namespace: Whether to namespace the URIs with the server name.
 
@@ -481,7 +499,7 @@ class MultiServerClient:
             ...     # URI is already namespaced: "filesystem:file:///path"
             ...     content = await client.read_resource(resource.uri)
         """
-        if cursor is not None:
+        if cursor is not None or params is not None:
             raise ValueError("Pagination not supported for multi-server aggregation")
 
         all_resources: List[Resource] = []
@@ -501,7 +519,11 @@ class MultiServerClient:
         return ListResourcesResult(resources=all_resources, nextCursor=None)
 
     def list_resource_templates(
-        self, cursor: Optional[str] = None, use_namespace: bool = True
+        self,
+        cursor: Optional[str] = None,
+        *,
+        params: Optional[PaginatedRequestParams] = None,
+        use_namespace: bool = True,
     ) -> ListResourceTemplatesResult:
         """Get combined list of all resource templates from all servers.
 
@@ -512,6 +534,8 @@ class MultiServerClient:
 
         Args:
             cursor: Optional pagination cursor. Not supported for multi-server aggregation,
+                must be None if provided.
+            params: Optional PaginatedRequestParams. Not supported for multi-server aggregation,
                 must be None if provided.
             use_namespace: Whether to namespace the URI templates with the server name.
 
@@ -533,7 +557,7 @@ class MultiServerClient:
             ...     uri = template.uriTemplate.replace("{path}", "example.txt")
             ...     content = await client.read_resource(uri)
         """
-        if cursor is not None:
+        if cursor is not None or params is not None:
             raise ValueError("Pagination not supported for multi-server aggregation")
 
         all_templates: List[ResourceTemplate] = []
@@ -576,6 +600,8 @@ class MultiServerClient:
         arguments: Dict[str, Any],
         read_timeout_seconds: Optional[timedelta] = None,
         progress_callback: Optional[ProgressFnT] = None,
+        *,
+        meta: Optional[dict[str, Any]] = None,
         server_name: Optional[str] = None,
     ) -> CallToolResult:
         """Route a tool call to the appropriate server.
@@ -585,6 +611,7 @@ class MultiServerClient:
             arguments: Arguments to pass to the tool.
             read_timeout_seconds: Optional timeout for reading the tool result.
             progress_callback: Optional callback for progress notifications.
+            meta: Optional metadata dictionary to pass additional information.
             server_name: Optional server name to explicitly specify which server to use.
                 If not provided, the server will be automatically determined from the tool name.
 
@@ -625,6 +652,7 @@ class MultiServerClient:
             arguments,
             read_timeout_seconds=read_timeout_seconds,
             progress_callback=progress_callback,
+            meta=meta,
         )
 
     async def read_resource(self, uri: Union[str, AnyUrl], server_name: Optional[str] = None) -> ReadResourceResult:

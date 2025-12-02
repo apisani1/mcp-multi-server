@@ -368,7 +368,7 @@ class TestToolRouting:
         assert result.isError is False
         assert "San Francisco" in result.content[0].text
         mock_tool_server.call_tool.assert_called_once_with(
-            "get_weather", {"location": "San Francisco"}, read_timeout_seconds=None, progress_callback=None
+            "get_weather", {"location": "San Francisco"}, read_timeout_seconds=None, progress_callback=None, meta=None
         )
 
     @pytest.mark.asyncio
