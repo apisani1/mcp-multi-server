@@ -41,6 +41,22 @@ async def set_logging_level(level: str) -> None:
 
 
 @mcp.prompt()
+def inventory_check() -> str:
+    """Creates a prompt that returns a text-based response.
+    The prompt requests a list of products in a given category along with their inventory status.
+    Args:
+        category: the product category to check
+    """
+
+    prompt = """
+    Consult the inventory database and list every product that needs restocking, providing its name, SKU,
+    on-hand quantity, and supplier.
+    """
+
+    return prompt
+
+
+@mcp.prompt()
 def category_promotion(category: str, discount_percentage: str) -> str:
     """Creates a prompt that returns a text-based response.
     The prompt requests a list of products in a given category with updated prices

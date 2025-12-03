@@ -109,7 +109,7 @@ def convert_mcp_content_to_tool_response(
         return {"type": "text", "text": f"[Image: {content_block.mimeType} received]"}
 
     if isinstance(content_block, AudioContent):
-        return {"type": "text", "text": f"[Audio: {content_block.mimeType} received]]"}
+        return {"type": "text", "text": f"[Audio: {content_block.mimeType} received]"}
 
     if isinstance(content_block, EmbeddedResource):
         if hasattr(content_block.resource, "text"):
