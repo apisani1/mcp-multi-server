@@ -44,7 +44,7 @@ TESTS_DIR_PARENT = (THIS_DIR / "..").resolve()
 # Ensure that `from tests ...` import statements work within the tests/ dir
 sys.path.insert(0, str(TESTS_DIR_PARENT))
 
-# Add src directory to path to ensure package can be importe
+# Add src directory to path to ensure package can be imported
 src_dir = TESTS_DIR_PARENT / "src"
 if src_dir.exists():
     sys.path.insert(0, str(src_dir))
@@ -152,7 +152,7 @@ def mock_tool_server(sample_tools: List[Tool]) -> MagicMock:
 
     # Mock call_tool
     async def mock_call_tool(name: str, arguments: Dict[str, Any], **kwargs: Any) -> CallToolResult:
-        # Accept but ignore read_timeout_seconds and progress_callback
+        # Accept but ignore read_timeout_seconds, progress_callback and meta
         if name == "get_weather":
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Weather in {arguments.get('location')}: Sunny, 72°F")],
