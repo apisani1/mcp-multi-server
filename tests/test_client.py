@@ -20,14 +20,14 @@ from mcp_multi_server.utils import print_capabilities_summary
 
 
 # ============================================================================
-# Phase 3b: Initialization and Config Loading Tests
+# Initialization and Config Loading Tests
 # ============================================================================
 
 
 class TestClientInitialization:
     """Tests for MultiServerClient initialization."""
 
-    def test_init_with_path_string(self, sample_config_file: Path) -> None:
+    def test_init_with_path_object(self, sample_config_file: Path) -> None:
         """Test initialization with path as string."""
         client = MultiServerClient(str(sample_config_file))
 
@@ -36,19 +36,6 @@ class TestClientInitialization:
         assert client.capabilities == {}
         assert client.tool_to_server == {}
         assert client.prompt_to_server == {}
-
-    def test_init_with_path_object(self, sample_config_file: Path) -> None:
-        """Test initialization with Path object."""
-        client = MultiServerClient(str(sample_config_file))
-
-        assert client.config_path == sample_config_file
-        assert client.sessions == {}
-        assert client.capabilities == {}
-
-    def test_init_does_not_load_config_immediately(self, sample_config_file: Path) -> None:
-        """Test that initialization does not load config immediately (lazy loading)."""
-        client = MultiServerClient(str(sample_config_file))
-        # Config should be None until connect_all() is called
         assert client._config is None
 
     def test_init_with_nonexistent_file_succeeds(self) -> None:
@@ -64,7 +51,7 @@ class TestClientInitialization:
         invalid_file.write_text("{ this is not valid json }")
 
         # Initialization should succeed, error happens on connect_all()
-        client = MultiServerClient(invalid_file)  # type: ignore
+        client = MultiServerClient(str(invalid_file))
         assert client.config_path == invalid_file
         assert client._config is None
 
@@ -81,13 +68,6 @@ class TestClientInitialization:
 
 class TestFromConfigClassMethod:
     """Tests for from_config class method."""
-
-    def test_from_config_with_path_string(self, sample_config_file: Path) -> None:
-        """Test from_config with string path."""
-        client = MultiServerClient.from_config(str(sample_config_file))
-
-        assert isinstance(client, MultiServerClient)
-        assert client.config_path == Path(sample_config_file)
 
     def test_from_config_with_path_object(self, sample_config_file: Path) -> None:
         """Test from_config with Path object."""
@@ -196,7 +176,7 @@ class TestContextManager:
 
 
 # ============================================================================
-# Phase 3c: Connection and Capability Aggregation Tests
+# Connection and Capability Aggregation Tests
 # ============================================================================
 
 
@@ -342,7 +322,7 @@ class TestCapabilityAggregation:
 
 
 # ============================================================================
-# Phase 3d: Routing Tests (Tools, Resources, Prompts)
+# Routing Tests (Tools, Resources, Prompts)
 # ============================================================================
 
 
@@ -460,7 +440,7 @@ class TestPromptRouting:
         result = await client.get_prompt("write_report", {"topic": "AI", "length": "short"})
 
         assert len(result.messages) > 0
-        assert "AI" in result.messages[0].content.text # type: ignore
+        assert "AI" in result.messages[0].content.text  # type: ignore
         # Check that server was called (actual parameters passed positionally, not named)
         mock_prompt_server.get_prompt.assert_called_once()
         # Verify the arguments
