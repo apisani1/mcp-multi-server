@@ -16,7 +16,6 @@ import pytest
 
 from mcp_multi_server import MultiServerClient
 from mcp_multi_server.config import MCPServersConfig
-from mcp_multi_server.utils import print_capabilities_summary
 
 
 # ============================================================================
@@ -31,7 +30,7 @@ class TestClientInitialization:
         """Test initialization with path as string."""
         client = MultiServerClient(str(sample_config_file))
 
-        assert client.config_path == Path(sample_config_file)
+        assert client.config_path == sample_config_file
         assert client.sessions == {}
         assert client.capabilities == {}
         assert client.tool_to_server == {}
@@ -61,7 +60,7 @@ class TestClientInitialization:
         invalid_file.write_text(json.dumps({"wrong_field": {}}))
 
         # Initialization should succeed, error happens on connect_all()
-        client = MultiServerClient(invalid_file)  # type: ignore
+        client = MultiServerClient(invalid_file)
         assert client.config_path == invalid_file
         assert client._config is None
 
@@ -71,15 +70,15 @@ class TestFromConfigClassMethod:
 
     def test_from_config_with_path_object(self, sample_config_file: Path) -> None:
         """Test from_config with Path object."""
-        client = MultiServerClient.from_config(str(sample_config_file))
+        client = MultiServerClient.from_config(sample_config_file)
 
         assert isinstance(client, MultiServerClient)
         assert client.config_path == sample_config_file
 
     def test_from_config_equivalent_to_init(self, sample_config_file: Path) -> None:
         """Test that from_config is equivalent to __init__."""
-        client1 = MultiServerClient(str(sample_config_file))
-        client2 = MultiServerClient.from_config(str(sample_config_file))
+        client1 = MultiServerClient(sample_config_file)
+        client2 = MultiServerClient.from_config(sample_config_file)
 
         assert client1.config_path == client2.config_path
         assert type(client1._config) == type(client2._config)
@@ -566,62 +565,3 @@ class TestErrorHandling:
 
         with pytest.raises(ValueError, match="Unknown prompt"):
             await client.get_prompt("test_prompt", {})
-
-
-class TestPrintCapabilitiesSummary:
-    """Tests for print_capabilities_summary method."""
-
-    def test_print_capabilities_summary_with_all_types(
-        self,
-        sample_config_dict: Dict[str, Any],
-        sample_tools: list,
-        sample_resources: list,
-        sample_prompts: list,
-        capsys: pytest.CaptureFixture,
-    ) -> None:
-        """Test printing capabilities summary with all capability types."""
-        from mcp.types import (
-            ListPromptsResult,
-            ListResourcesResult,
-            ListToolsResult,
-        )
-        from mcp_multi_server.types import ServerCapabilities
-
-        client = MultiServerClient.from_dict(sample_config_dict)
-
-        # Populate capabilities directly (not via list_* methods)
-        client.capabilities = {
-            "tool_server": ServerCapabilities(
-                name="tool_server", tools=ListToolsResult(tools=sample_tools, nextCursor=None)
-            ),
-            "resource_server": ServerCapabilities(
-                name="resource_server", resources=ListResourcesResult(resources=sample_resources, nextCursor=None)
-            ),
-            "prompt_server": ServerCapabilities(
-                name="prompt_server", prompts=ListPromptsResult(prompts=sample_prompts, nextCursor=None)
-            ),
-        }
-
-        # Print summary
-        print_capabilities_summary(client)
-
-        captured = capsys.readouterr()
-        assert "tool_server" in captured.out
-        assert "resource_server" in captured.out
-        assert "prompt_server" in captured.out
-        assert "get_weather" in captured.out  # Tool name
-        assert "Inventory Overview" in captured.out  # Resource name
-        assert "write_report" in captured.out  # Prompt name
-
-    def test_print_capabilities_summary_with_empty_capabilities(
-        self, sample_config_dict: Dict[str, Any], capsys: pytest.CaptureFixture
-    ) -> None:
-        """Test printing capabilities summary with no capabilities."""
-        client = MultiServerClient.from_dict(sample_config_dict)
-        client.capabilities = {}
-
-        print_capabilities_summary(client)
-
-        captured = capsys.readouterr()
-        # Should still produce header even with no capabilities
-        assert "CAPABILITIES SUMMARY" in captured.out

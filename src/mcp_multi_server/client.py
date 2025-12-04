@@ -91,7 +91,7 @@ class MultiServerClient:
         ...     tools = client.list_tools()
     """
 
-    def __init__(self, config_path: str = "mcp_servers.json") -> None:
+    def __init__(self, config_path: Union[str, Path] = "mcp_servers.json") -> None:
         """Initialize the multi-server client.
 
         Args:
@@ -112,7 +112,7 @@ class MultiServerClient:
         self._config: Optional[MCPServersConfig] = None
 
     @classmethod
-    def from_config(cls, config_path: str) -> "MultiServerClient":
+    def from_config(cls, config_path: Union[str, Path]) -> "MultiServerClient":
         """Create a client from a configuration file path.
 
         This is a convenience class method that's equivalent to the regular constructor.
