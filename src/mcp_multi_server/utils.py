@@ -194,7 +194,7 @@ def parse_namespace_uri(uri: Union[str, AnyUrl]) -> tuple[str | None, str]:
     """Parse a namespaced URI to extract server name and original URI.
 
     Args:
-        namespaced_uri: URI that may contain a server namespace prefix.
+        uri: URI that may contain a server namespace prefix.
 
     Returns:
         Tuple of (server_name, uri). If no namespace is present, server_name is None
@@ -209,15 +209,26 @@ def parse_namespace_uri(uri: Union[str, AnyUrl]) -> tuple[str | None, str]:
         ('db', 'records://users/123')
 
     Note:
-        This function looks for the first colon to determine if a namespace exists.
-        It does not validate that the extracted server name actually exists.
+        This function distinguishes between protocol schemes (scheme://) and
+        namespace prefixes (namespace:). Protocol schemes are not treated as namespaces.
     """
-    namespaced_uri = str(uri)
-    if ":" in namespaced_uri:
-        parts = namespaced_uri.split(":", 1)
-        if len(parts) == 2:
-            return parts[0], parts[1]
-    return None, namespaced_uri
+    uri_str = str(uri)
+
+    # Find the first colon
+    colon_index = uri_str.find(":")
+    if colon_index == -1:
+        # No colon found, definitely no namespace
+        return None, uri_str
+
+    # Check if this colon is part of a protocol scheme (://)
+    if colon_index + 2 < len(uri_str) and uri_str[colon_index : colon_index + 3] == "://":
+        # This is a protocol scheme (e.g., file://, http://), not a namespace
+        return None, uri_str
+
+    # This is a namespace prefix, split on the first colon
+    namespace = uri_str[:colon_index]
+    remaining_uri = uri_str[colon_index + 1 :]
+    return namespace, remaining_uri
 
 
 def extract_template_variables(uri_template: Union[str, AnyUrl]) -> List[str]:

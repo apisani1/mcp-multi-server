@@ -54,7 +54,6 @@ class TestMcpToolsToOpenaiFormat:
         result = mcp_tools_to_openai_format([])
 
         assert result == []
-        assert isinstance(result, list)
 
     def test_preserves_complex_input_schema(self) -> None:
         """Test that complex inputSchema is preserved correctly."""
@@ -136,17 +135,11 @@ class TestParseNamespaceUri:
         assert uri == "file:///path/to/file.txt"
 
     def test_parse_non_namespaced_uri(self) -> None:
-        """Test parsing URI without namespace.
-
-        Note: Currently the function splits on first colon, so "file:///"
-        is interpreted as server="file", uri="///path". This behavior may
-        need refinement to distinguish between namespace prefixes and protocol schemes.
-        """
+        """Test parsing URI without namespace."""
         server_name, uri = parse_namespace_uri("file:///path/to/file.txt")
 
-        # Current behavior: splits on first colon
-        assert server_name == "file"
-        assert uri == "///path/to/file.txt"
+        assert server_name is None
+        assert uri == "file:///path/to/file.txt"
 
     def test_parse_uri_with_multiple_colons(self) -> None:
         """Test parsing URI with multiple colons (splits on first)."""
@@ -184,6 +177,27 @@ class TestParseNamespaceUri:
         assert server_name == "server"
         assert uri == original_uri
 
+    def test_parse_http_uri_without_namespace(self) -> None:
+        """Test that http:// URIs are not treated as namespaced."""
+        server_name, uri = parse_namespace_uri("http://example.com/path")
+
+        assert server_name is None
+        assert uri == "http://example.com/path"
+
+    def test_parse_https_uri_without_namespace(self) -> None:
+        """Test that https:// URIs are not treated as namespaced."""
+        server_name, uri = parse_namespace_uri("https://example.com:8080/path")
+
+        assert server_name is None
+        assert uri == "https://example.com:8080/path"
+
+    def test_parse_namespaced_http_uri(self) -> None:
+        """Test parsing namespaced URI containing http:// protocol."""
+        server_name, uri = parse_namespace_uri("server:http://example.com/path")
+
+        assert server_name == "server"
+        assert uri == "http://example.com/path"
+
 
 class TestExtractTemplateVariables:
     """Tests for extract_template_variables function."""
@@ -218,13 +232,6 @@ class TestExtractTemplateVariables:
         variables = extract_template_variables("users/{id}/posts/{id}")
 
         assert variables == ["id"]
-        assert len(variables) == 1
-
-    def test_extract_with_nested_braces(self) -> None:
-        """Test extraction handles only outer braces."""
-        variables = extract_template_variables("path/{var}")
-
-        assert variables == ["var"]
 
     def test_extract_complex_template(self) -> None:
         """Test extracting from complex template."""
@@ -282,7 +289,6 @@ class TestSubstituteTemplateVariables:
         result = substitute_template_variables("path/{var1}/{var2}", {"var1": "value1"})
 
         assert result == "path/value1/{var2}"
-        assert "{var2}" in result
 
     def test_substitute_empty_value(self) -> None:
         """Test substituting variable with empty value."""

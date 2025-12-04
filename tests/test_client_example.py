@@ -98,7 +98,7 @@ async def test_resource() -> None:
 
         resource_result = client.list_resources()
         all_resources = resource_result.resources
-        resource = await search_and_instantiate_resource(client, all_resources, "list_categories")  # type: ignore
+        resource = await search_and_instantiate_resource(client, all_resources, "get_database_schema")  # type: ignore
 
         assert "{" in resource and "}" in resource, "Expected JSON content in resource"
 
