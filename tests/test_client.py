@@ -39,7 +39,7 @@ class TestClientInitialization:
 
     def test_init_with_path_object(self, sample_config_file: Path) -> None:
         """Test initialization with Path object."""
-        client = MultiServerClient(sample_config_file)
+        client = MultiServerClient(str(sample_config_file))
 
         assert client.config_path == sample_config_file
         assert client.sessions == {}
@@ -47,8 +47,7 @@ class TestClientInitialization:
 
     def test_init_does_not_load_config_immediately(self, sample_config_file: Path) -> None:
         """Test that initialization does not load config immediately (lazy loading)."""
-        client = MultiServerClient(sample_config_file)
-
+        client = MultiServerClient(str(sample_config_file))
         # Config should be None until connect_all() is called
         assert client._config is None
 
@@ -65,7 +64,7 @@ class TestClientInitialization:
         invalid_file.write_text("{ this is not valid json }")
 
         # Initialization should succeed, error happens on connect_all()
-        client = MultiServerClient(invalid_file)
+        client = MultiServerClient(invalid_file)  # type: ignore
         assert client.config_path == invalid_file
         assert client._config is None
 
@@ -75,7 +74,7 @@ class TestClientInitialization:
         invalid_file.write_text(json.dumps({"wrong_field": {}}))
 
         # Initialization should succeed, error happens on connect_all()
-        client = MultiServerClient(invalid_file)
+        client = MultiServerClient(invalid_file)  # type: ignore
         assert client.config_path == invalid_file
         assert client._config is None
 
@@ -92,15 +91,15 @@ class TestFromConfigClassMethod:
 
     def test_from_config_with_path_object(self, sample_config_file: Path) -> None:
         """Test from_config with Path object."""
-        client = MultiServerClient.from_config(sample_config_file)
+        client = MultiServerClient.from_config(str(sample_config_file))
 
         assert isinstance(client, MultiServerClient)
         assert client.config_path == sample_config_file
 
     def test_from_config_equivalent_to_init(self, sample_config_file: Path) -> None:
         """Test that from_config is equivalent to __init__."""
-        client1 = MultiServerClient(sample_config_file)
-        client2 = MultiServerClient.from_config(sample_config_file)
+        client1 = MultiServerClient(str(sample_config_file))
+        client2 = MultiServerClient.from_config(str(sample_config_file))
 
         assert client1.config_path == client2.config_path
         assert type(client1._config) == type(client2._config)
@@ -121,22 +120,22 @@ class TestFromDictClassMethod:
         """Test from_dict loads server configurations."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
-        assert "tool_server" in client._config.mcpServers
-        assert "resource_server" in client._config.mcpServers
-        assert "prompt_server" in client._config.mcpServers
+        assert "tool_server" in client._config.mcpServers  # type: ignore
+        assert "resource_server" in client._config.mcpServers  # type: ignore
+        assert "prompt_server" in client._config.mcpServers  # type: ignore
 
     def test_from_dict_with_minimal_config(self, minimal_config_dict: Dict[str, Any]) -> None:
         """Test from_dict with minimal configuration."""
         client = MultiServerClient.from_dict(minimal_config_dict)
 
-        assert len(client._config.mcpServers) == 1
-        assert "test_server" in client._config.mcpServers
+        assert len(client._config.mcpServers) == 1  # type: ignore
+        assert "test_server" in client._config.mcpServers  # type: ignore
 
     def test_from_dict_with_empty_config(self, empty_config_dict: Dict[str, Any]) -> None:
         """Test from_dict with empty configuration."""
         client = MultiServerClient.from_dict(empty_config_dict)
 
-        assert len(client._config.mcpServers) == 0
+        assert len(client._config.mcpServers) == 0  # type: ignore
 
     def test_from_dict_with_invalid_schema_raises_error(self) -> None:
         """Test from_dict with invalid schema raises pydantic ValidationError."""
@@ -240,7 +239,7 @@ class TestConnectionManagement:
                 mock_session_class.return_value = mock_session
 
                 async with client as ctx_client:
-                    await ctx_client.connect_all(ctx_client._stack)
+                    await ctx_client.connect_all(ctx_client._stack)  # type: ignore
 
                     # Should have connected to all 3 servers
                     assert len(client.sessions) == 3
@@ -280,7 +279,7 @@ class TestCapabilityAggregation:
         assert result.tools[0].name == "get_weather"
         assert result.tools[1].name == "calculate"
         # Check that server attribution is added
-        assert result.tools[0].meta.get("serverName") == "tool_server"
+        assert result.tools[0].meta.get("serverName") == "tool_server"  # type: ignore
 
     def test_list_resources_aggregates_from_all_servers(
         self,
@@ -308,7 +307,7 @@ class TestCapabilityAggregation:
         assert result.resources is not None
         assert len(result.resources) == 2
         # Resources are namespaced by default
-        assert "resource_server:" in result.resources[0].uri
+        assert "resource_server:" in str(result.resources[0].uri)
         assert "Inventory Overview" in result.resources[0].name
 
     def test_list_prompts_aggregates_from_all_servers(
@@ -339,7 +338,7 @@ class TestCapabilityAggregation:
         assert result.prompts[0].name == "write_report"
         assert result.prompts[1].name == "roleplay"
         # Check that server attribution is added
-        assert result.prompts[0].meta.get("serverName") == "prompt_server"
+        assert result.prompts[0].meta.get("serverName") == "prompt_server"  # type: ignore
 
 
 # ============================================================================
@@ -366,7 +365,7 @@ class TestToolRouting:
         result = await client.call_tool("get_weather", {"location": "San Francisco"})
 
         assert result.isError is False
-        assert "San Francisco" in result.content[0].text
+        assert "San Francisco" in result.content[0].text  # type: ignore
         mock_tool_server.call_tool.assert_called_once_with(
             "get_weather", {"location": "San Francisco"}, read_timeout_seconds=None, progress_callback=None, meta=None
         )
@@ -381,7 +380,7 @@ class TestToolRouting:
 
         # Should return error result, not raise exception
         assert result.isError is True
-        assert "Unknown tool" in result.content[0].text
+        assert "Unknown tool" in result.content[0].text  # type: ignore
 
     @pytest.mark.asyncio
     async def test_call_tool_with_explicit_unknown_server_returns_error(
@@ -396,7 +395,7 @@ class TestToolRouting:
 
         # Should return error result, not raise exception
         assert result.isError is True
-        assert "Unknown server" in result.content[0].text
+        assert "Unknown server" in result.content[0].text  # type: ignore
 
 
 class TestResourceRouting:
@@ -461,7 +460,7 @@ class TestPromptRouting:
         result = await client.get_prompt("write_report", {"topic": "AI", "length": "short"})
 
         assert len(result.messages) > 0
-        assert "AI" in result.messages[0].content.text
+        assert "AI" in result.messages[0].content.text # type: ignore
         # Check that server was called (actual parameters passed positionally, not named)
         mock_prompt_server.get_prompt.assert_called_once()
         # Verify the arguments
