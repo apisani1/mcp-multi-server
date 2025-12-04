@@ -3,6 +3,10 @@ Test script for examples/client/chat_client.py functionality (tools, prompts and
 
 This module consolidates tests for audio, image, files, uris, prompt, and resource handling functionality
 from the example chat client implementation.
+
+Note: These are integration tests that require actual MCP servers to be running.
+      Use `pytest -m integration` to run only these tests.
+      Use `pytest -m "not integration"` to skip these tests (default in CI).
 """
 
 import pytest
@@ -15,6 +19,7 @@ from examples.client.chat_client import (
 from mcp_multi_server import MultiServerClient
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_audio_tool() -> None:
     """Test the get_audio tool and audio handling functions."""
@@ -26,6 +31,7 @@ async def test_audio_tool() -> None:
         assert result_content == "[Audio: audio/mpeg received]"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_image_tool() -> None:
     """Test the get_image tool and image handling functions."""
@@ -37,6 +43,7 @@ async def test_image_tool() -> None:
         assert result_content == "[Image: image/png received]"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_file_tool() -> None:
     """Test the get_file tool and file handling functions."""
@@ -48,6 +55,7 @@ async def test_file_tool() -> None:
         assert result_content == "[Embedded resource: binary data received]"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_uri_tool() -> None:
     """Test the get_uri_content tool and uri handling functions."""
@@ -61,6 +69,7 @@ async def test_uri_tool() -> None:
         assert result_content == "[Resource link: https://modelcontextprotocol.io/docs/getting-started/intro]"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_simple_prompt() -> None:
     """Test proccesing of prompts without parameters."""
@@ -79,6 +88,7 @@ async def test_simple_prompt() -> None:
         )
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_prompt_not_found() -> None:
     """Test that non-existent prompts return empty list."""
@@ -91,6 +101,7 @@ async def test_prompt_not_found() -> None:
         assert len(prompt_messages) == 0, "Expected empty list for non-existent prompt"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_resource() -> None:
     """Test proccesing of resources."""
@@ -103,6 +114,7 @@ async def test_resource() -> None:
         assert "{" in resource and "}" in resource, "Expected JSON content in resource"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_resource_not_found() -> None:
     """Test that non-existent resources return empty string."""

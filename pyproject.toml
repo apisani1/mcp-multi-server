@@ -251,3 +251,8 @@ extend_skip = [
 max-line-length = 120
 ignore = ["D004", "D002"]
 ignore-path = ["docs/_build"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests requiring MCP servers (deselect with '-m \"not integration\"')",
+]
