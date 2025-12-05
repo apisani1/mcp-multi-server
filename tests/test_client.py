@@ -1,6 +1,7 @@
 """Tests for MultiServerClient class."""
 
 import json
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import (
     Any,
@@ -12,12 +13,28 @@ from unittest.mock import (
     MagicMock,
     patch,
 )
-from pydantic import AnyUrl
-import pytest
 
-from mcp.types import Prompt, Tool
+import pytest
+from pydantic import (
+    AnyUrl,
+    ValidationError,
+)
+
+from mcp.shared.exceptions import McpError
+from mcp.types import (
+    ListPromptsResult,
+    ListResourcesResult,
+    ListResourceTemplatesResult,
+    ListToolsResult,
+    Prompt,
+    Tool,
+)
 from mcp_multi_server import MultiServerClient
-from mcp_multi_server.config import MCPServersConfig
+from mcp_multi_server.config import (
+    MCPServersConfig,
+    ServerConfig,
+)
+from mcp_multi_server.types import ServerCapabilities
 
 
 # ============================================================================
@@ -120,7 +137,6 @@ class TestFromDictClassMethod:
 
     def test_from_dict_with_invalid_schema_raises_error(self) -> None:
         """Test from_dict with invalid schema raises pydantic ValidationError."""
-        from pydantic import ValidationError
 
         invalid_dict: Dict[str, Any] = {"wrong_field": {}}
 
@@ -144,9 +160,9 @@ class TestContextManager:
         assert client._stack is None
 
     @pytest.mark.asyncio
-    async def test_context_manager_multiple_uses_succeeds(self, empty_config_dict: Dict[str, Any]) -> None:
+    async def test_context_manager_multiple_uses_succeeds(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test that using context manager twice succeeds (creates new stack each time)."""
-        client = MultiServerClient.from_dict(empty_config_dict)
+        client = MultiServerClient.from_dict(sample_config_dict)
 
         async with client:
             assert client._stack is not None
@@ -242,8 +258,6 @@ class TestCapabilityAggregation:
         server2_tools: list,
     ) -> None:
         """Test list_tools aggregates tools from all servers."""
-        from mcp.types import ListToolsResult
-        from mcp_multi_server.types import ServerCapabilities
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -281,8 +295,6 @@ class TestCapabilityAggregation:
         server2_resources: list,
     ) -> None:
         """Test list_resources aggregates resources from all servers."""
-        from mcp.types import ListResourcesResult
-        from mcp_multi_server.types import ServerCapabilities
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -326,8 +338,6 @@ class TestCapabilityAggregation:
         server2_prompts: list,
     ) -> None:
         """Test list_prompts aggregates prompts from all servers."""
-        from mcp.types import ListPromptsResult
-        from mcp_multi_server.types import ServerCapabilities
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -506,7 +516,6 @@ class TestResourceRouting:
         self, sample_config_dict: Dict[str, Any], mock_resource_server: MagicMock
     ) -> None:
         """Test read_resource without namespace or server_name raises McpError."""
-        from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -521,7 +530,6 @@ class TestResourceRouting:
         self, sample_config_dict: Dict[str, Any], mock_resource_server: MagicMock
     ) -> None:
         """Test read_resource namespaced with unknown server raises McpError."""
-        from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -536,7 +544,6 @@ class TestResourceRouting:
         self, sample_config_dict: Dict[str, Any], mock_resource_server: MagicMock
     ) -> None:
         """Test read_resource with explicit unknown server raises McpError."""
-        from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -579,7 +586,6 @@ class TestPromptRouting:
         self, sample_config_dict: Dict[str, Any], mock_prompt_server: MagicMock
     ) -> None:
         """Test get_prompt with unknown prompt raises McpError."""
-        from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -595,7 +601,6 @@ class TestPromptRouting:
         self, sample_config_dict: Dict[str, Any], mock_prompt_server: MagicMock
     ) -> None:
         """Test get_prompt with explicit unknown server raises McpError."""
-        from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -615,7 +620,6 @@ class TestPromptRouting:
         sample_prompts: List[Prompt],
     ) -> None:
         """Test get_prompt with explicit unknown server raises McpError."""
-        from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -635,7 +639,6 @@ class TestPromptRouting:
         self, sample_config_dict: Dict[str, Any], mock_prompt_server: MagicMock, sample_prompts: List[Prompt]
     ) -> None:
         """Test get_prompt with unknown prompt in a known server raises McpError."""
-        from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -658,46 +661,163 @@ class TestPromptRouting:
 class TestCollisionDetection:
     """Tests for detecting and warning about collisions."""
 
-    def test_detect_tool_collision_in_routing_map(
+    @pytest.mark.asyncio
+    async def test_detect_tool_collision_logs_warning(
         self,
-        sample_config_dict: Dict[str, Any],
-        sample_tools: list,
+        empty_config_dict: Dict[str, Any],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Test that tool routing map handles last-registered-wins for collisions."""
-        client = MultiServerClient.from_dict(sample_config_dict)
+        """Test that tool collisions are logged with server names."""
 
-        # Manually set up collision scenario: same tool from two servers
-        # In real usage, this happens during connect_all() where collision is logged
-        client.tool_to_server = {}
+        # Create a tool that will be provided by both servers
+        weather_tool = Tool(
+            name="get_weather", description="Get weather", inputSchema={"type": "object", "properties": {}}
+        )
 
-        # First server registers the tool
-        client.tool_to_server["get_weather"] = "server1"
+        client = MultiServerClient.from_dict(empty_config_dict)
 
-        # Second server overwrites it (last-registered-wins)
-        client.tool_to_server["get_weather"] = "server2"
+        # Create mock session that will be returned by ClientSession
+        mock_session1 = MagicMock()
+        mock_session1.initialize = AsyncMock()
+        mock_session1.list_tools = AsyncMock(return_value=ListToolsResult(tools=[weather_tool], nextCursor=None))
+        mock_session1.list_resources = AsyncMock(return_value=ListResourcesResult(resources=[], nextCursor=None))
+        mock_session1.list_resource_templates = AsyncMock(
+            return_value=ListResourceTemplatesResult(resourceTemplates=[], nextCursor=None)
+        )
+        mock_session1.list_prompts = AsyncMock(return_value=ListPromptsResult(prompts=[], nextCursor=None))
 
-        # The routing map should have the last server
-        assert client.tool_to_server["get_weather"] == "server2"
+        mock_session2 = MagicMock()
+        mock_session2.initialize = AsyncMock()
+        mock_session2.list_tools = AsyncMock(return_value=ListToolsResult(tools=[weather_tool], nextCursor=None))
+        mock_session2.list_resources = AsyncMock(return_value=ListResourcesResult(resources=[], nextCursor=None))
+        mock_session2.list_resource_templates = AsyncMock(
+            return_value=ListResourceTemplatesResult(resourceTemplates=[], nextCursor=None)
+        )
+        mock_session2.list_prompts = AsyncMock(return_value=ListPromptsResult(prompts=[], nextCursor=None))
 
-    def test_detect_prompt_collision_in_routing_map(
+        # Manually set up AsyncExitStack
+        stack = AsyncExitStack()
+        await stack.__aenter__()
+        client._stack = stack
+
+        try:
+            # Mock the connection infrastructure
+            with (
+                patch("mcp_multi_server.client.stdio_client") as mock_stdio,
+                patch("mcp_multi_server.client.ClientSession") as mock_client_session,
+            ):
+
+                mock_stdio.return_value.__aenter__ = AsyncMock(return_value=(MagicMock(), MagicMock()))
+                mock_stdio.return_value.__aexit__ = AsyncMock()
+
+                # First connection - mock ClientSession as async context manager
+                mock_client_session.return_value.__aenter__ = AsyncMock(return_value=mock_session1)
+                mock_client_session.return_value.__aexit__ = AsyncMock()
+
+                with caplog.at_level("WARNING"):
+                    await client._connect_server(stack, "server1", ServerConfig(command="python", args=["-m", "test"]))
+
+                assert client.tool_to_server["get_weather"] == "server1"
+                assert "collision" not in caplog.text.lower()  # No collision yet
+
+                # Second connection (should cause collision) - update mock to return mock_session2
+                mock_client_session.return_value.__aenter__ = AsyncMock(return_value=mock_session2)
+
+                caplog.clear()
+                with caplog.at_level("WARNING"):
+                    await client._connect_server(stack, "server2", ServerConfig(command="python", args=["-m", "test"]))
+
+                # Verify last-registered-wins
+                assert client.tool_to_server["get_weather"] == "server2"
+
+                # Verify collision warning was logged
+                assert "collision detected" in caplog.text.lower()
+                assert "get_weather" in caplog.text
+                assert "server1" in caplog.text  # Already provided by
+                assert "server2" in caplog.text  # Now overridden by
+        finally:
+            await stack.__aexit__(None, None, None)
+            client._stack = None
+
+    @pytest.mark.asyncio
+    async def test_detect_prompt_collision_logs_warning(
         self,
-        sample_config_dict: Dict[str, Any],
-        sample_prompts: list,
+        empty_config_dict: Dict[str, Any],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Test that prompt routing map handles last-registered-wins for collisions."""
-        client = MultiServerClient.from_dict(sample_config_dict)
+        """Test that prompt collisions are logged with server names."""
 
-        # Manually set up collision scenario: same prompt from two servers
-        client.prompt_to_server = {}
+        # Create a prompt that will be provided by both servers
+        report_prompt = Prompt(name="write_report", description="Generate a report", arguments=[])
 
-        # First server registers the prompt
-        client.prompt_to_server["write_report"] = "server1"
+        client = MultiServerClient.from_dict(empty_config_dict)
 
-        # Second server overwrites it (last-registered-wins)
-        client.prompt_to_server["write_report"] = "server2"
+        # Create mock session that will be returned by ClientSession
+        mock_session1 = MagicMock()
+        mock_session1.initialize = AsyncMock()
+        mock_session1.list_tools = AsyncMock(return_value=ListToolsResult(tools=[], nextCursor=None))
+        mock_session1.list_resources = AsyncMock(return_value=ListResourcesResult(resources=[], nextCursor=None))
+        mock_session1.list_resource_templates = AsyncMock(
+            return_value=ListResourceTemplatesResult(resourceTemplates=[], nextCursor=None)
+        )
+        mock_session1.list_prompts = AsyncMock(
+            return_value=ListPromptsResult(prompts=[report_prompt], nextCursor=None)
+        )
 
-        # The routing map should have the last server
-        assert client.prompt_to_server["write_report"] == "server2"
+        mock_session2 = MagicMock()
+        mock_session2.initialize = AsyncMock()
+        mock_session2.list_tools = AsyncMock(return_value=ListToolsResult(tools=[], nextCursor=None))
+        mock_session2.list_resources = AsyncMock(return_value=ListResourcesResult(resources=[], nextCursor=None))
+        mock_session2.list_resource_templates = AsyncMock(
+            return_value=ListResourceTemplatesResult(resourceTemplates=[], nextCursor=None)
+        )
+        mock_session2.list_prompts = AsyncMock(
+            return_value=ListPromptsResult(prompts=[report_prompt], nextCursor=None)
+        )
+
+        # Manually set up AsyncExitStack
+        stack = AsyncExitStack()
+        await stack.__aenter__()
+        client._stack = stack
+
+        try:
+            # Mock the connection infrastructure
+            with (
+                patch("mcp_multi_server.client.stdio_client") as mock_stdio,
+                patch("mcp_multi_server.client.ClientSession") as mock_client_session,
+            ):
+
+                mock_stdio.return_value.__aenter__ = AsyncMock(return_value=(MagicMock(), MagicMock()))
+                mock_stdio.return_value.__aexit__ = AsyncMock()
+
+                # First connection - mock ClientSession as async context manager
+                mock_client_session.return_value.__aenter__ = AsyncMock(return_value=mock_session1)
+                mock_client_session.return_value.__aexit__ = AsyncMock()
+
+                with caplog.at_level("WARNING"):
+                    await client._connect_server(stack, "server1", ServerConfig(command="python", args=["-m", "test"]))
+
+                assert client.prompt_to_server["write_report"] == "server1"
+                assert "collision" not in caplog.text.lower()  # No collision yet
+
+                # Second connection (should cause collision) - update mock to return mock_session2
+                mock_client_session.return_value.__aenter__ = AsyncMock(return_value=mock_session2)
+
+                caplog.clear()
+                with caplog.at_level("WARNING"):
+                    await client._connect_server(stack, "server2", ServerConfig(command="python", args=["-m", "test"]))
+
+                # Verify last-registered-wins
+                assert client.prompt_to_server["write_report"] == "server2"
+
+                # Verify collision warning was logged
+                assert "collision detected" in caplog.text.lower()
+                assert "write_report" in caplog.text
+                assert "server1" in caplog.text  # Already provided by
+                assert "server2" in caplog.text  # Now overridden by
+        finally:
+            await stack.__aexit__(None, None, None)
+            client._stack = None
 
 
 class TestErrorHandling:
