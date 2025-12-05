@@ -64,10 +64,10 @@ class MultiServerClient:
     """Manages multiple MCP server connections for a MCP host.
 
     This class handles:
-    - Connecting to multiple MCP servers
-    - Discovering and aggregating server capabilities (tools, resources, prompts)
-    - Routing tool, prompt and resource calls to the correct server
-    - Managing session lifecycles with AsyncExitStack
+        - Connecting to multiple MCP servers
+        - Discovering and aggregating server capabilities (tools, resources, templates, prompts)
+        - Routing tool, prompt and resource calls to the correct server
+        - Managing session lifecycles with AsyncExitStack
 
     The client can be used as an async context manager for automatic cleanup:
 
@@ -357,19 +357,28 @@ class MultiServerClient:
         """Set the logging level for the multi-server client and the MCP connected servers.
 
         Args:
-            level: Logging level as a string in lower case (e.g., "debug", "info", "warning", "error", "critical") as
-                defined in MCP LoggingLevel.
+            level: Logging level as a string in lower case (e.g., "debug", "info", "notice", "warning", "error",
+                "critical", "alert", "emergency") as defined in MCP LoggingLevel.
+
+        Note:
+            The following mappings of MCP to Python logging leves are applied:
+            - "notice" -> "WARNING"
+            - "alert" and "emergency" -> "CRITICAL"
 
         Examples:
             >>> await MultiServerClient.set_logging_level("debug")
         """
-        if level not in {"debug", "info", "warning", "error", "critical"}:
+        if level not in {"debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"}:
             raise ValueError(
                 f""""
                 Invalid logging level: {level}.
                 See: https://modelcontextprotocol.github.io/python-sdk/api/#mcp.ClientSession.set_logging_level")
             """
             )
+        if level == "notice":
+            level = "warning"
+        elif level == "alert" or level == "emergency":
+            level = "critical"
         for server_name, session in self.sessions.items():
             try:
                 await session.set_logging_level(level=level)
@@ -396,11 +405,11 @@ class MultiServerClient:
                 must be None if provided.
 
         Returns:
-            ListToolsResult containing all tools from all servers with server_name in meta.
+            ListToolsResult containing all tools from all servers with the server name in the serverName meta field.
             The nextCursor field is always None (pagination not supported).
 
         Raises:
-            ValueError: If cursor is not None (pagination not supported).
+            ValueError: If cursor or params is not None (pagination not supported).
 
         Examples:
             >>> result = client.list_tools()
@@ -438,11 +447,11 @@ class MultiServerClient:
                 must be None if provided.
 
         Returns:
-            ListPromptsResult containing all prompts from all servers with server_name in meta.
+            ListPromptsResult containing all prompts from all servers with the server name in the serverName meta fieldthe.
             The nextCursor field is always None (pagination not supported).
 
         Raises:
-            ValueError: If cursor is not None (pagination not supported).
+            ValueError: If cursor or params is not None (pagination not supported).
 
         Examples:
             >>> result = client.list_prompts()
@@ -488,7 +497,7 @@ class MultiServerClient:
         Returns:
             ListResourcesResult containing all resources from all servers with:
             - Namespaced URIs in format "server_name:original_uri" for auto-routing
-            - server_name in meta field for explicit server identification
+            - the server name in the serverName meta field for explicit server identification
             The nextCursor field is always None (pagination not supported).
 
         Raises:
@@ -544,7 +553,7 @@ class MultiServerClient:
         Returns:
             ListResourceTemplatesResult containing all templates from all servers with:
             - Namespaced URI templates in format "server_name:original_template"
-            - server_name in meta field for explicit server identification
+            - the server name in the serverName meta field for explicit server identification
             The nextCursor field is always None (pagination not supported).
 
         Raises:
@@ -664,8 +673,8 @@ class MultiServerClient:
             uri: Resource URI. Can be namespaced as "server:uri" for auto-routing.
                  URIs from list_resources() are already namespaced for convenience.
                  Accepts both str and AnyUrl types for MCP library compatibility.
-            server_name: Optional explicit server name. If provided, ignores any namespace
-                        in the URI and uses this server directly.
+            server_name: Optional explicit server name. If provided, assumes that
+                there is no any namespace in the provided URI.
 
         Returns:
             Resource content.
@@ -681,7 +690,7 @@ class MultiServerClient:
             >>> resources = client.list_resources().resources
             >>> result = await client.read_resource(resources[0].uri)
 
-            Explicit server (ignores namespace if present in URI):
+            Explicit server (no namespace should be present in URI):
             >>> result = await client.read_resource("file:///path", server_name="filesystem")
 
             Manual namespacing:
