@@ -137,6 +137,78 @@ def sample_prompts() -> List[Prompt]:
     ]
 
 
+@pytest.fixture
+def server2_tools() -> List[Tool]:
+    """Tools from a second server for testing aggregation."""
+    return [
+        Tool(
+            name="send_email",
+            description="Send an email",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string"},
+                    "subject": {"type": "string"},
+                    "body": {"type": "string"},
+                },
+                "required": ["to", "subject", "body"],
+            },
+        ),
+        Tool(
+            name="search_database",
+            description="Search the database",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                },
+                "required": ["query"],
+            },
+        ),
+    ]
+
+
+@pytest.fixture
+def server2_resources() -> List[Resource]:
+    """Resources from a second server for testing aggregation."""
+    return [
+        Resource(
+            uri=AnyUrl("database://users"),
+            name="User Database",
+            description="Database of all users",
+            mimeType="application/json",
+        ),
+        Resource(
+            uri=AnyUrl("database://logs"),
+            name="System Logs",
+            description="Application logs",
+            mimeType="text/plain",
+        ),
+    ]
+
+
+@pytest.fixture
+def server2_prompts() -> List[Prompt]:
+    """Prompts from a second server for testing aggregation."""
+    return [
+        Prompt(
+            name="code_review",
+            description="Perform a code review",
+            arguments=[
+                PromptArgument(name="language", description="Programming language", required=True),
+                PromptArgument(name="style", description="Review style", required=False),
+            ],
+        ),
+        Prompt(
+            name="summarize",
+            description="Summarize text",
+            arguments=[
+                PromptArgument(name="text", description="Text to summarize", required=True),
+            ],
+        ),
+    ]
+
+
 # ============================================================================
 # Mock Server Fixtures
 # ============================================================================

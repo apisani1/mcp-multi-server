@@ -5,15 +5,17 @@ from pathlib import Path
 from typing import (
     Any,
     Dict,
+    List,
 )
 from unittest.mock import (
     AsyncMock,
     MagicMock,
     patch,
 )
-
+from pydantic import AnyUrl
 import pytest
 
+from mcp.types import Prompt, Tool
 from mcp_multi_server import MultiServerClient
 from mcp_multi_server.config import MCPServersConfig
 
@@ -183,7 +185,7 @@ class TestConnectionManagement:
     """Tests for server connection management."""
 
     @pytest.mark.asyncio
-    async def test_connect_to_server_success(
+    async def test_async_with_connects_all_servers(
         self, sample_config_dict: Dict[str, Any], mock_tool_server: MagicMock
     ) -> None:
         """Test successful connection to a server."""
@@ -201,10 +203,13 @@ class TestConnectionManagement:
 
                 async with client:
                     # Connection should be established
-                    assert len(client.sessions) > 0
+                    assert len(client.sessions) == 3
+                    assert "tool_server" in client.sessions
+                    assert "resource_server" in client.sessions
+                    assert "prompt_server" in client.sessions
 
     @pytest.mark.asyncio
-    async def test_connect_all_connects_all_servers(self, sample_config_dict: Dict[str, Any]) -> None:
+    async def test_connect_all_method_connects_all_servers(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test connect_all connects to all configured servers."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -234,6 +239,7 @@ class TestCapabilityAggregation:
         self,
         sample_config_dict: Dict[str, Any],
         sample_tools: list,
+        server2_tools: list,
     ) -> None:
         """Test list_tools aggregates tools from all servers."""
         from mcp.types import ListToolsResult
@@ -241,29 +247,38 @@ class TestCapabilityAggregation:
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
-        # Populate capabilities (not sessions)
+        # Populate capabilities with TWO servers that have tools
         client.capabilities = {
             "tool_server": ServerCapabilities(
                 name="tool_server", tools=ListToolsResult(tools=sample_tools, nextCursor=None)
             ),
-            "resource_server": ServerCapabilities(
-                name="resource_server", tools=ListToolsResult(tools=[], nextCursor=None)
+            "email_server": ServerCapabilities(
+                name="email_server", tools=ListToolsResult(tools=server2_tools, nextCursor=None)
             ),
         }
 
         result = client.list_tools()
 
         assert result.tools is not None
-        assert len(result.tools) == 2  # get_weather and calculate
+        assert len(result.tools) == 4  # 2 from tool_server + 2 from email_server
+
+        # Verify tools from tool_server (appear first)
         assert result.tools[0].name == "get_weather"
-        assert result.tools[1].name == "calculate"
-        # Check that server attribution is added
         assert result.tools[0].meta.get("serverName") == "tool_server"  # type: ignore
+        assert result.tools[1].name == "calculate"
+        assert result.tools[1].meta.get("serverName") == "tool_server"  # type: ignore
+
+        # Verify tools from email_server (appear second)
+        assert result.tools[2].name == "send_email"
+        assert result.tools[2].meta.get("serverName") == "email_server"  # type: ignore
+        assert result.tools[3].name == "search_database"
+        assert result.tools[3].meta.get("serverName") == "email_server"  # type: ignore
 
     def test_list_resources_aggregates_from_all_servers(
         self,
         sample_config_dict: Dict[str, Any],
         sample_resources: list,
+        server2_resources: list,
     ) -> None:
         """Test list_resources aggregates resources from all servers."""
         from mcp.types import ListResourcesResult
@@ -271,28 +286,44 @@ class TestCapabilityAggregation:
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
-        # Populate capabilities
+        # Populate capabilities with TWO servers that have resources
         client.capabilities = {
             "resource_server": ServerCapabilities(
                 name="resource_server", resources=ListResourcesResult(resources=sample_resources, nextCursor=None)
             ),
-            "tool_server": ServerCapabilities(
-                name="tool_server", resources=ListResourcesResult(resources=[], nextCursor=None)
+            "database_server": ServerCapabilities(
+                name="database_server", resources=ListResourcesResult(resources=server2_resources, nextCursor=None)
             ),
         }
 
         result = client.list_resources()
 
         assert result.resources is not None
-        assert len(result.resources) == 2
-        # Resources are namespaced by default
-        assert "resource_server:" in str(result.resources[0].uri)
-        assert "Inventory Overview" in result.resources[0].name
+        assert len(result.resources) == 4  # 2 from resource_server + 2 from database_server
+
+        # Verify resources from resource_server (appear first) with namespace prefix
+        assert "resource_server:inventory://overview" == str(result.resources[0].uri)
+        assert result.resources[0].name == "Inventory Overview"
+        assert result.resources[0].meta.get("serverName") == "resource_server"  # type: ignore
+
+        assert "resource_server:inventory://items" == str(result.resources[1].uri)
+        assert result.resources[1].name == "All Items"
+        assert result.resources[1].meta.get("serverName") == "resource_server"  # type: ignore
+
+        # Verify resources from database_server (appear second) with namespace prefix
+        assert "database_server:database://users" == str(result.resources[2].uri)
+        assert result.resources[2].name == "User Database"
+        assert result.resources[2].meta.get("serverName") == "database_server"  # type: ignore
+
+        assert "database_server:database://logs" == str(result.resources[3].uri)
+        assert result.resources[3].name == "System Logs"
+        assert result.resources[3].meta.get("serverName") == "database_server"  # type: ignore
 
     def test_list_prompts_aggregates_from_all_servers(
         self,
         sample_config_dict: Dict[str, Any],
         sample_prompts: list,
+        server2_prompts: list,
     ) -> None:
         """Test list_prompts aggregates prompts from all servers."""
         from mcp.types import ListPromptsResult
@@ -300,24 +331,32 @@ class TestCapabilityAggregation:
 
         client = MultiServerClient.from_dict(sample_config_dict)
 
-        # Populate capabilities
+        # Populate capabilities with TWO servers that have prompts
         client.capabilities = {
             "prompt_server": ServerCapabilities(
                 name="prompt_server", prompts=ListPromptsResult(prompts=sample_prompts, nextCursor=None)
             ),
-            "tool_server": ServerCapabilities(
-                name="tool_server", prompts=ListPromptsResult(prompts=[], nextCursor=None)
+            "assistant_server": ServerCapabilities(
+                name="assistant_server", prompts=ListPromptsResult(prompts=server2_prompts, nextCursor=None)
             ),
         }
 
         result = client.list_prompts()
 
         assert result.prompts is not None
-        assert len(result.prompts) == 2
+        assert len(result.prompts) == 4  # 2 from prompt_server + 2 from assistant_server
+
+        # Verify prompts from prompt_server (appear first)
         assert result.prompts[0].name == "write_report"
-        assert result.prompts[1].name == "roleplay"
-        # Check that server attribution is added
         assert result.prompts[0].meta.get("serverName") == "prompt_server"  # type: ignore
+        assert result.prompts[1].name == "roleplay"
+        assert result.prompts[1].meta.get("serverName") == "prompt_server"  # type: ignore
+
+        # Verify prompts from assistant_server (appear second)
+        assert result.prompts[2].name == "code_review"
+        assert result.prompts[2].meta.get("serverName") == "assistant_server"  # type: ignore
+        assert result.prompts[3].name == "summarize"
+        assert result.prompts[3].meta.get("serverName") == "assistant_server"  # type: ignore
 
 
 # ============================================================================
@@ -326,7 +365,7 @@ class TestCapabilityAggregation:
 
 
 class TestToolRouting:
-    """Tests for tool routing to appropriate servers."""
+    """Tests for tool routing to appropriate servers and error handling."""
 
     @pytest.mark.asyncio
     async def test_call_tool_routes_to_correct_server(
@@ -350,12 +389,19 @@ class TestToolRouting:
         )
 
     @pytest.mark.asyncio
-    async def test_call_tool_with_unknown_tool_returns_error(self, sample_config_dict: Dict[str, Any]) -> None:
+    async def test_call_tool_with_unknown_tool_returns_error(
+        self,
+        sample_config_dict: Dict[str, Any],
+        mock_tool_server: MagicMock,
+    ) -> None:
         """Test call_tool with unknown tool returns error result."""
         client = MultiServerClient.from_dict(sample_config_dict)
-        client.tool_to_server = {}
 
-        result = await client.call_tool("unknown_tool", {})
+        # Set up routing map
+        client.tool_to_server = {"get_weather": "tool_server"}
+        client.sessions = {"tool_server": mock_tool_server}
+
+        result = await client.call_tool("not_a_tool", {})
 
         # Should return error result, not raise exception
         assert result.isError is True
@@ -363,22 +409,75 @@ class TestToolRouting:
 
     @pytest.mark.asyncio
     async def test_call_tool_with_explicit_unknown_server_returns_error(
-        self, sample_config_dict: Dict[str, Any]
+        self,
+        sample_config_dict: Dict[str, Any],
+        mock_tool_server: MagicMock,
     ) -> None:
         """Test call_tool with explicit unknown server name returns error result."""
         client = MultiServerClient.from_dict(sample_config_dict)
-        client.sessions = {}
+
+        # Set up routing map
+        client.tool_to_server = {"get_weather": "tool_server"}
+        client.sessions = {"tool_server": mock_tool_server}
 
         # Use explicit server_name parameter (not auto-routing)
-        result = await client.call_tool("get_weather", {}, server_name="unknown_server")
+        result = await client.call_tool("get_weather", {}, server_name="not_a_server")
 
         # Should return error result, not raise exception
         assert result.isError is True
         assert "Unknown server" in result.content[0].text  # type: ignore
 
+    @pytest.mark.asyncio
+    async def test_call_tool_with_server_with_no_tools_returns_error(
+        self,
+        sample_config_dict: Dict[str, Any],
+        mock_tool_server: MagicMock,
+        mock_resource_server: MagicMock,
+        sample_tools: List[Tool],
+    ) -> None:
+        """Test call_tool with explicit knwon server that has no tools returns error result."""
+        client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
+        client.tool_to_server = {"get_weather": "tool_server"}
+        client.sessions = {"tool_server": mock_tool_server, "resource_server": mock_resource_server}
+        client.capabilities = {
+            "tool_server": MagicMock(tools=MagicMock(tools=sample_tools)),
+            "resource_server": MagicMock(tools=None),
+        }
+
+        # Use explicit server_name parameter (not auto-routing)
+        result = await client.call_tool("get_weather", {}, server_name="resource_server")
+
+        # Should return error result, not raise exception
+        assert result.isError is True
+        assert "has no tools" in result.content[0].text  # type: ignore
+
+    @pytest.mark.asyncio
+    async def test_call_tool_with_wrong_tool_raises_mcperror(
+        self, sample_config_dict: Dict[str, Any], mock_tool_server: MagicMock, sample_tools: List[Tool]
+    ) -> None:
+        """Test call_tool with explicit server but unknown tool returns error result."""
+
+        client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
+        client.prompt_to_server = {"write_report": "prompt_server"}
+        client.sessions = {"tool_server": mock_tool_server}
+        client.capabilities = {
+            "tool_server": MagicMock(prompts=MagicMock(prompts=sample_tools)),
+        }
+
+        # Use explicit server_name parameter (not auto-routing)
+        result = await client.call_tool("wrong_tool", {}, server_name="tool_server")
+
+        # Should return error result, not raise exception
+        assert result.isError is True
+        assert "not found in server" in result.content[0].text  # type: ignore
+
 
 class TestResourceRouting:
-    """Tests for resource routing to appropriate servers."""
+    """Tests for resource routing to appropriate servers and error handling."""
 
     @pytest.mark.asyncio
     async def test_read_resource_with_namespace_routes_correctly(
@@ -388,6 +487,8 @@ class TestResourceRouting:
     ) -> None:
         """Test read_resource with namespaced URI routes correctly."""
         client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
         client.sessions = {"resource_server": mock_resource_server}
 
         # Read resource with namespace prefix
@@ -398,28 +499,52 @@ class TestResourceRouting:
         assert hasattr(result.contents[0], "text")
         assert "Inventory Overview" in result.contents[0].text
         # The mock server is called with AnyUrl type
-        mock_resource_server.read_resource.assert_called_once()
+        mock_resource_server.read_resource.assert_called_once_with(AnyUrl("inventory://overview"))
 
     @pytest.mark.asyncio
-    async def test_read_resource_without_namespace_raises_mcperror(self, sample_config_dict: Dict[str, Any]) -> None:
-        """Test read_resource without namespace raises McpError."""
+    async def test_read_resource_without_namespace_or_server_raises_mcperror(
+        self, sample_config_dict: Dict[str, Any], mock_resource_server: MagicMock
+    ) -> None:
+        """Test read_resource without namespace or server_name raises McpError."""
         from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
+        client.sessions = {"resource_server": mock_resource_server}
 
         with pytest.raises(McpError, match="Must specify server_name"):
             await client.read_resource("inventory://overview")
 
     @pytest.mark.asyncio
-    async def test_read_resource_with_unknown_server_raises_mcperror(self, sample_config_dict: Dict[str, Any]) -> None:
-        """Test read_resource with unknown server raises McpError."""
+    async def test_read_resource_namespaced_with_unknown_server_raises_mcperror(
+        self, sample_config_dict: Dict[str, Any], mock_resource_server: MagicMock
+    ) -> None:
+        """Test read_resource namespaced with unknown server raises McpError."""
         from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
-        client.sessions = {}
 
-        with pytest.raises(McpError):
-            await client.read_resource("unknown_server:inventory://overview")
+        # Set up routing map
+        client.sessions = {"resource_server": mock_resource_server}
+
+        with pytest.raises(McpError, match="Unknown server"):
+            await client.read_resource("not_a_server:inventory://overview")
+
+    @pytest.mark.asyncio
+    async def test_read_resource_with_explicit_unknown_server_raises_mcperror(
+        self, sample_config_dict: Dict[str, Any], mock_resource_server: MagicMock
+    ) -> None:
+        """Test read_resource with explicit unknown server raises McpError."""
+        from mcp.shared.exceptions import McpError
+
+        client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
+        client.sessions = {"resource_server": mock_resource_server}
+
+        with pytest.raises(McpError, match="Unknown server"):
+            await client.read_resource("inventory://overview", server_name="not_a_server")
 
 
 class TestPromptRouting:
@@ -433,6 +558,8 @@ class TestPromptRouting:
     ) -> None:
         """Test get_prompt routes to correct server."""
         client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
         client.prompt_to_server = {"write_report": "prompt_server"}
         client.sessions = {"prompt_server": mock_prompt_server}
 
@@ -448,32 +575,83 @@ class TestPromptRouting:
         assert call_args[1]["arguments"] == {"topic": "AI", "length": "short"}  # keyword arg
 
     @pytest.mark.asyncio
-    async def test_get_prompt_with_unknown_prompt_raises_mcperror(self, sample_config_dict: Dict[str, Any]) -> None:
+    async def test_get_prompt_with_unknown_prompt_raises_mcperror(
+        self, sample_config_dict: Dict[str, Any], mock_prompt_server: MagicMock
+    ) -> None:
         """Test get_prompt with unknown prompt raises McpError."""
         from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
-        client.prompt_to_server = {}
+
+        # Set up routing map
+        client.prompt_to_server = {"write_report": "prompt_server"}
+        client.sessions = {"prompt_server": mock_prompt_server}
 
         with pytest.raises(McpError, match="Unknown prompt"):
-            await client.get_prompt("unknown_prompt", {})
+            await client.get_prompt("not_a_prompt", {})
 
     @pytest.mark.asyncio
     async def test_get_prompt_with_explicit_unknown_server_raises_mcperror(
-        self, sample_config_dict: Dict[str, Any]
+        self, sample_config_dict: Dict[str, Any], mock_prompt_server: MagicMock
     ) -> None:
         """Test get_prompt with explicit unknown server raises McpError."""
         from mcp.shared.exceptions import McpError
 
         client = MultiServerClient.from_dict(sample_config_dict)
-        client.sessions = {}
 
-        with pytest.raises(McpError):
-            await client.get_prompt("write_report", {}, server_name="unknown_server")
+        # Set up routing map
+        client.prompt_to_server = {"write_report": "prompt_server"}
+        client.sessions = {"prompt_server": mock_prompt_server}
+
+        with pytest.raises(McpError, match="Unknown server"):
+            await client.get_prompt("write_report", {}, server_name="not_a_server")
+
+    @pytest.mark.asyncio
+    async def test_get_prompt_with_server_with_no_prompts_raises_mcperror(
+        self,
+        sample_config_dict: Dict[str, Any],
+        mock_prompt_server: MagicMock,
+        mock_resource_server: MagicMock,
+        sample_prompts: List[Prompt],
+    ) -> None:
+        """Test get_prompt with explicit unknown server raises McpError."""
+        from mcp.shared.exceptions import McpError
+
+        client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
+        client.prompt_to_server = {"write_report": "prompt_server"}
+        client.sessions = {"prompt_server": mock_prompt_server, "resource_server": mock_resource_server}
+        client.capabilities = {
+            "prompt_server": MagicMock(prompts=MagicMock(prompts=sample_prompts)),
+            "resource_server": MagicMock(prompts=None),
+        }
+
+        with pytest.raises(McpError, match="has no prompts"):
+            await client.get_prompt("write_report", {}, server_name="resource_server")
+
+    @pytest.mark.asyncio
+    async def test_get_prompt_with_wrong_pront_raises_mcperror(
+        self, sample_config_dict: Dict[str, Any], mock_prompt_server: MagicMock, sample_prompts: List[Prompt]
+    ) -> None:
+        """Test get_prompt with unknown prompt in a known server raises McpError."""
+        from mcp.shared.exceptions import McpError
+
+        client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Set up routing map
+        client.prompt_to_server = {"write_report": "prompt_server", "roleplay": "prompt_server"}
+        client.sessions = {"prompt_server": mock_prompt_server}
+        client.capabilities = {
+            "prompt_server": MagicMock(prompts=MagicMock(prompts=sample_prompts)),
+        }
+
+        with pytest.raises(McpError, match="not found in server"):
+            await client.get_prompt("wrong_prompt", {}, server_name="prompt_server")
 
 
 # ============================================================================
-# Phase 3e: Error Handling and Collision Detection Tests
+# Error Handling and Collision Detection Tests
 # ============================================================================
 
 

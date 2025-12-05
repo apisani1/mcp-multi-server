@@ -690,7 +690,7 @@ class MultiServerClient:
         if server_name is None:
             # Try to extract server from namespaced URI
             server_name, uri = parse_namespace_uri(uri)
-            if server_name is None or server_name not in self.sessions:
+            if server_name is None:
                 # No server specified and, URI is not namespaced or server in namespace is unknown
                 raise McpError(
                     ErrorData(
