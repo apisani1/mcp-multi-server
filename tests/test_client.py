@@ -651,7 +651,7 @@ class TestPromptRouting:
 
 
 # ============================================================================
-# Error Handling and Collision Detection Tests
+# Collision Detection Tests and Server Error Handling Tests
 # ============================================================================
 
 
@@ -704,8 +704,8 @@ class TestErrorHandling:
     """Tests for error handling scenarios."""
 
     @pytest.mark.asyncio
-    async def test_call_tool_handles_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
-        """Test call_tool handles server errors gracefully."""
+    async def test_call_tool_propagates_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
+        """Test call_tool propagates server errors gracefully."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
         mock_server = MagicMock()
@@ -718,8 +718,8 @@ class TestErrorHandling:
             await client.call_tool("test_tool", {})
 
     @pytest.mark.asyncio
-    async def test_read_resource_handles_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
-        """Test read_resource handles server errors gracefully."""
+    async def test_read_resource_propagates_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
+        """Test read_resource propagates server errors gracefully."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
         mock_server = MagicMock()
@@ -731,15 +731,15 @@ class TestErrorHandling:
             await client.read_resource("test_server:invalid://uri")
 
     @pytest.mark.asyncio
-    async def test_get_prompt_handles_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
-        """Test get_prompt handles server errors gracefully."""
+    async def test_get_prompt_propagates_server_error(self, sample_config_dict: Dict[str, Any]) -> None:
+        """Test get_prompt propagates server errors gracefully."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
         mock_server = MagicMock()
-        mock_server.get_prompt = AsyncMock(side_effect=ValueError("Unknown prompt"))
+        mock_server.get_prompt = AsyncMock(side_effect=ValueError("Invalid arguments"))
 
         client.prompt_to_server = {"test_prompt": "test_server"}
         client.sessions = {"test_server": mock_server}
 
-        with pytest.raises(ValueError, match="Unknown prompt"):
+        with pytest.raises(ValueError, match="Invalid arguments"):
             await client.get_prompt("test_prompt", {})
