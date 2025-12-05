@@ -72,6 +72,8 @@ class MultiServerClient:
     The client can be used as an async context manager for automatic cleanup:
 
     Examples:
+    ::
+
         Basic usage with context manager:
         >>> async with MultiServerClient.from_config("mcp_servers.json") as client:
         ...     tools = client.list_tools()
@@ -673,6 +675,8 @@ class MultiServerClient:
                      is not provided, or if the resource read fails or times out.
 
         Examples:
+        ::
+
             Auto-routing with namespaced URI (from list_resources()):
             >>> resources = client.list_resources().resources
             >>> result = await client.read_resource(resources[0].uri)

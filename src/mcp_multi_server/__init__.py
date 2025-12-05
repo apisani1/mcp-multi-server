@@ -13,6 +13,8 @@ Key Features:
     - OpenAI function calling integration utilities
 
 Examples:
+::
+
     Basic usage with context manager:
     >>> async with MultiServerClient.from_config("mcp_servers.json") as client:
     ...     tools = client.list_tools()

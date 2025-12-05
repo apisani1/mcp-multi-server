@@ -19,7 +19,7 @@ MCP Multi-Server simplifies the complexity of working with multiple MCP servers 
 Connect to multiple MCP servers and manage them through a single client interface with automatic lifecycle management using Python's async context managers.
 
 ### Capability Aggregation
-Automatically discover and aggregate all capabilities (tools, resources, prompts, resource templates) from all connected servers into a unified view.
+Automatically discover and aggregate all capabilities (tools, resources, resource templates, prompts) from all connected servers into a unified view.
 
 ### Smart Routing
 - **Tools & Prompts**: Auto-route by name - no need to specify which server
@@ -177,10 +177,10 @@ Coming soon - uncomment as guides are created:
 
 ## Project Status
 
-- **Version**: 0.1.0
+- **Version**: 1.0.0
 - **Status**: Alpha/Beta - Production ready
 - **Python**: 3.10+
-- **Test Coverage**: 83%
+- **Test Coverage**: 81%
 - **License**: MIT
 
 ## Support

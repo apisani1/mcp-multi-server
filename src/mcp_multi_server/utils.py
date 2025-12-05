@@ -44,6 +44,8 @@ def configure_logging(
         datefmt: Optional custom date format string.
 
     Examples:
+    ::
+
         Basic usage - set log level to DEBUG:
         >>> from mcp_multi_server import configure_logging
         >>> configure_logging(level="DEBUG")
