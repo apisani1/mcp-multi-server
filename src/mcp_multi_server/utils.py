@@ -27,7 +27,9 @@ def configure_logging(
     format: Optional[str] = None,
     datefmt: Optional[str] = None,
 ) -> None:
-    """Configure logging for the mcp_multi_server library.
+    """
+    Configure logging for the mcp_multi_server library but not for the MCP servers
+    see MultiServerClient.set_logging_level().
 
     This function provides a convenient way to configure logging for the library.
     It ensures a handler is configured and sets the log level.
@@ -270,7 +272,8 @@ def substitute_template_variables(uri_template: Union[str, AnyUrl], variables: D
         variables: Dictionary mapping variable names to their replacement values.
 
     Returns:
-        URI with all variables replaced by their encoded values.
+        URI with all variables replaced by their encoded values. Special characters
+        in values are percent-encoded to ensure valid URIs.
 
     Examples:
         >>> substitute_template_variables(

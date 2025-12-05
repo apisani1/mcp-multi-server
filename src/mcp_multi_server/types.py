@@ -15,7 +15,7 @@ from mcp.types import (
 class ServerCapabilities(BaseModel):
     """Capabilities discovered from an MCP server.
 
-    This class stores all the capabilities (tools, resources, prompts, templates)
+    This class stores all the capabilities (tools, resources, templates, prompts)
     that were discovered during server initialization. It's used internally to
     track what each server can do and to aggregate capabilities across all servers.
 
