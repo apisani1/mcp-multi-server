@@ -331,6 +331,54 @@ class TestCapabilityAggregation:
         assert result.resources[3].name == "System Logs"
         assert result.resources[3].meta.get("serverName") == "database_server"  # type: ignore
 
+    def test_list_resource_templates_aggregates_from_all_servers(
+        self,
+        sample_config_dict: Dict[str, Any],
+        sample_resource_templates: list,
+        server2_resource_templates: list,
+    ) -> None:
+        """Test list_resource_templates aggregates resource templates from all servers."""
+
+        client = MultiServerClient.from_dict(sample_config_dict)
+
+        # Populate capabilities with TWO servers that have resource templates
+        client.capabilities = {
+            "resource_server": ServerCapabilities(
+                name="resource_server",
+                resource_templates=ListResourceTemplatesResult(
+                    resourceTemplates=sample_resource_templates, nextCursor=None
+                ),
+            ),
+            "database_server": ServerCapabilities(
+                name="database_server",
+                resource_templates=ListResourceTemplatesResult(
+                    resourceTemplates=server2_resource_templates, nextCursor=None
+                ),
+            ),
+        }
+
+        result = client.list_resource_templates()
+
+        assert result.resourceTemplates is not None
+        assert len(result.resourceTemplates) == 4  # 2 from resource_server + 2 from database_server
+
+        # Verify resources from resource_server (appear first) with namespace prefix
+        assert "resource_server:inventory://item/{item_id}" == result.resourceTemplates[0].uriTemplate
+        assert result.resourceTemplates[0].name == "Item by ID"
+        assert result.resourceTemplates[0].meta.get("serverName") == "resource_server"  # type: ignore
+
+        assert "resource_server:inventory://category/{category}" == result.resourceTemplates[1].uriTemplate
+        assert result.resourceTemplates[1].name == "Items by Category"
+        assert result.resourceTemplates[1].meta.get("serverName") == "resource_server"  # type: ignore
+        # Verify resources from database_server (appear second) with namespace prefix
+        assert "database_server:inventory://category_summary/{category}" == result.resourceTemplates[2].uriTemplate
+        assert result.resourceTemplates[2].name == "Category Summary "
+        assert result.resourceTemplates[2].meta.get("serverName") == "database_server"  # type: ignore
+
+        assert "database_server:inventory://low_items/{category}" == result.resourceTemplates[3].uriTemplate
+        assert result.resourceTemplates[3].name == "Category stock needing restock"
+        assert result.resourceTemplates[3].meta.get("serverName") == "database_server"  # type: ignore
+
     def test_list_prompts_aggregates_from_all_servers(
         self,
         sample_config_dict: Dict[str, Any],

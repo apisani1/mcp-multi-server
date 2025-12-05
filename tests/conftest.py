@@ -188,6 +188,25 @@ def server2_resources() -> List[Resource]:
 
 
 @pytest.fixture
+def server2_resource_templates() -> List[ResourceTemplate]:
+    """Resources from a second server for testing aggregation."""
+    return [
+        ResourceTemplate(
+            uriTemplate="inventory://category_summary/{category}",
+            name="Category Summary ",
+            description="Statistical summary of items in a category",
+            mimeType="application/json",
+        ),
+        ResourceTemplate(
+            uriTemplate="inventory://low_items/{category}",
+            name="Category stock needing restock",
+            description="List of items in a category that are low in stock",
+            mimeType="text/plain",
+        ),
+    ]
+
+
+@pytest.fixture
 def server2_prompts() -> List[Prompt]:
     """Prompts from a second server for testing aggregation."""
     return [
