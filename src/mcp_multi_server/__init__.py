@@ -10,7 +10,6 @@ Key Features:
     - Intelligent routing of tool calls, resource reads, and prompt retrievals
     - Namespace-based URI routing for resources and resource templates
     - Collision detection for tools and prompts
-    - OpenAI function calling integration utilities
 
 Examples:
 ::
@@ -46,7 +45,7 @@ See Also:
     - Examples: https://github.com/apisani1/mcp-multi-server/tree/main/examples
 """
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"
 
 from .client import MultiServerClient
 from .config import (

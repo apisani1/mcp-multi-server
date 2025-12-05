@@ -4,16 +4,20 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "mcp-multi-server"
-version = "0.1.0"
+version = "0.0.1"
 description = "A Python library for managing connections to multiple Model Context Protocol (MCP) servers"
 authors = [{ name = "Antonio Pisani", email = "antonio.pisani@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "mcp (>=1.13.1,<2.0.0)",
-    "pydantic (>=2.0.0,<3.0.0)",
+dependencies = ["mcp (>=1.13.1,<2.0.0)", "pydantic (>=2.0.0,<3.0.0)"]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "multi-server",
+    "openai",
+    "llm",
+    "ai",
 ]
-keywords = ["mcp", "model-context-protocol", "multi-server", "openai", "llm", "ai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -49,6 +53,7 @@ packages = [{ include = "mcp_multi_server", from = "src" }]
 version_variable = [
     "pyproject.toml:version",
     "docs/conf.py:release",
+    "docs/index.md:version",
     "src/mcp_multi_server/__init__.py:__version__",
 ]
 

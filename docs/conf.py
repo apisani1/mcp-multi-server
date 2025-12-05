@@ -14,7 +14,7 @@ from datetime import datetime
 project = "mcp-multi-server"
 copyright = f"{datetime.now().year}, Antonio Pisani"
 author = "Antonio Pisani"
-release = "0.1.0"
+release = "0.0.1"
 
 os.environ["SPHINX_BUILD"] = "True"
 
@@ -154,7 +154,7 @@ autodoc_member_order = "bysource"  # Keep same order as in the source code
 
 # Simple mocking for straightforward imports
 autodoc_mock_imports = [  # type: ignore
-    
+
 ]
 
 # For more complex mocking where simple mocking isn't sufficient
@@ -165,7 +165,7 @@ class Mock(MagicMock):
 
 # Complex modules that need special handling
 MOCK_MODULES = [  # type: ignore
-    
+
 ]
 
 # Only update sys.modules if there are modules to mock

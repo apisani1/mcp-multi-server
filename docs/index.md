@@ -7,7 +7,7 @@ A Python library for managing connections to multiple [Model Context Protocol (M
 MCP Multi-Server simplifies the complexity of working with multiple MCP servers by providing:
 
 - **Unified Management**: Single interface to connect and manage multiple MCP servers simultaneously
-- **Automatic Discovery**: Discover and aggregate tools, resources, prompts, and templates from all connected servers
+- **Automatic Discovery**: Discover and aggregate tools, resources, templates and prompts from all connected servers
 - **Intelligent Routing**: Automatically route tool calls, resource reads, and prompt retrievals to the correct server
 - **Collision Detection**: Detect and warn about duplicate tool or prompt names across servers
 - **Namespace Support**: Use namespaced URIs (server:uri) for unambiguous resource routing
@@ -177,8 +177,8 @@ Coming soon - uncomment as guides are created:
 
 ## Project Status
 
-- **Version**: 1.0.0
-- **Status**: Alpha/Beta - Production ready
+- **Version**: 0.0.1
+- **Status**: Production Ready
 - **Python**: 3.10+
 - **Test Coverage**: 81%
 - **License**: MIT
