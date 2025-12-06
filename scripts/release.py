@@ -298,9 +298,21 @@ def update_version_files(project_file: str, new_version: Version) -> None:
                 logger.warning(f"'{file_path}' does not exist, skipping.")
                 continue
             content = file.read_text()
-            new_content, found = re.subn(
-                rf'{version_key} = "[^"]+"', f'{version_key} = "{new_version}"', content, count=1
-            )
+            # Build pattern with capturing groups to preserve format
+            pattern = rf'({re.escape(version_key)})(\s*)([:=])(\s*)(["\']?)([^"\'<>\s\n]+)(["\']?)'
+
+            def replace_version(match: re.Match) -> str:
+                """Preserve the original format while updating the version."""
+                key = match.group(1)          # version_key
+                space1 = match.group(2)       # whitespace before separator
+                separator = match.group(3)    # : or =
+                space2 = match.group(4)       # whitespace after separator
+                open_quote = match.group(5)   # opening quote (", ', or empty)
+                close_quote = match.group(7)  # closing quote (", ', or empty)
+
+                return f'{key}{space1}{separator}{space2}{open_quote}{new_version}{close_quote}'
+
+            new_content, found = re.subn(pattern, replace_version, content, count=1)
             if found:
                 file.write_text(new_content)
                 updated_files.append(file_path)
