@@ -3269,8 +3269,7 @@ version = "2.3.0"
 description = "A lil' TOML parser"
 optional = false
 python-versions = ">=3.8"
-groups = ["docs", "lint", "test", "typing"]
-markers = "python_version == \"3.10\""
+groups = ["dev", "docs", "lint", "test", "typing"]
 files = [
     {file = "tomli-2.3.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:88bd15eb972f3664f5ed4b57c1634a97153b4bac4479dcb6a495f41921eb7f45"},
     {file = "tomli-2.3.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:883b1c0d6398a6a9d29b508c331fa56adbcdff647f6ace4dfca0f50e90dfd0ba"},
@@ -3315,6 +3314,7 @@ files = [
     {file = "tomli-2.3.0-py3-none-any.whl", hash = "sha256:e95b1af3c5b07d9e643909b5abbec77cd9f1217e6d0bca72b0234736b9fb1f1b"},
     {file = "tomli-2.3.0.tar.gz", hash = "sha256:64be704a875d2a59753d80ee8a533c3fe183e3f06807ff7dc2232938ccb01549"},
 ]
+markers = {docs = "python_version == \"3.10\"", lint = "python_version == \"3.10\"", test = "python_version == \"3.10\"", typing = "python_version == \"3.10\""}
 
 [[package]]
 name = "tomlkit"
@@ -3475,4 +3475,4 @@ openai = ["openai"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "0a554ee31a44278976ce3a2e99cd2db763e69b5fd05d07d6da60ccc79fd9db70"
+content-hash = "3232dd6333555cb7680613b7348213dfaf3815856ab3497bf6018687e6979a1f"

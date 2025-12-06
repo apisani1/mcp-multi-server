@@ -53,7 +53,7 @@ packages = [{ include = "mcp_multi_server", from = "src" }]
 version_variable = [
     "pyproject.toml:version",
     "docs/conf.py:release",
-    "docs/index.md:version",
+    "docs/index.md:**version**",
     "src/mcp_multi_server/__init__.py:__version__",
 ]
 
@@ -68,6 +68,7 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
 python-dotenv = "^1.1.0"
+tomli = "^2.0.0"
 
 [tool.poetry.group.test]
 optional = true

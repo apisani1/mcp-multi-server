@@ -2,8 +2,10 @@
 import re
 import sys
 from pathlib import Path
-
-import toml  # type: ignore[import-untyped]
+try:
+    import tomllib  # Part of the standard library on Python 3.11+
+except ImportError:
+    import tomli as tomllib  # For Python < 3.11
 
 
 def update_files(new_version: str, dry_run: bool = False) -> None:
@@ -11,8 +13,8 @@ def update_files(new_version: str, dry_run: bool = False) -> None:
     if not pyproject.exists():
         print("Error: pyproject.toml not found.")
         sys.exit(1)
-
-    data = toml.load(pyproject)
+    with open(pyproject, "rb") as f:
+        data = tomllib.load(f)
     try:
         version_variables = data["tool"]["semantic_release"]["version_variable"]
     except KeyError:
