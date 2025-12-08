@@ -177,7 +177,7 @@ Coming soon - uncomment as guides are created:
 
 ## Project Status
 
-- **Version**: 0.0.2
+- **Version**: 1.0.0
 - **Status**: Production Ready
 - **Python**: 3.10+
 - **Test Coverage**: 81%

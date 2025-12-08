@@ -45,7 +45,7 @@ See Also:
     - Examples: https://github.com/apisani1/mcp-multi-server/tree/main/examples
 """
 
-__version__ = "0.0.2"
+__version__ = "1.0.0"
 
 from .client import MultiServerClient
 from .config import (

@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "mcp-multi-server"
-version = "0.0.2"
+version = "1.0.0"
 description = "A Python library for managing connections to multiple Model Context Protocol (MCP) servers"
 authors = [{ name = "Antonio Pisani", email = "antonio.pisani@gmail.com" }]
 readme = "README.md"
