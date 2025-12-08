@@ -1,0 +1,1 @@
+"""Example MCP client implementation."""
