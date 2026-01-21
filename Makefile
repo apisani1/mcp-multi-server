@@ -220,6 +220,9 @@ help-release:
 run-chat:
 	@poetry run python3 -m examples.client.chat_client $(ARGS)
 
+run-sync-chat:
+	@poetry run python3 -m examples.client.sync_chat_client $(ARGS)
+
 # Run example servers (for testing)
 run-tool-server:
 	@poetry run python3 -m examples.servers.tool_server

@@ -6,7 +6,6 @@ from multiple MCP servers.
 """
 
 import argparse
-import asyncio
 import json
 import os
 import traceback
@@ -33,7 +32,7 @@ from mcp.types import (
     Resource,
     ResourceTemplate,
 )
-from mcp_multi_server import MultiServerClient
+from mcp_multi_server import SyncMultiServerClient
 from mcp_multi_server.utils import (
     configure_logging,
     extract_template_variables,
@@ -41,16 +40,14 @@ from mcp_multi_server.utils import (
     print_capabilities_summary,
     substitute_template_variables,
 )
-
-
 from openai import OpenAI
 
 
 load_dotenv(find_dotenv())
 
 
-async def search_and_instantiate_prompt(
-    client: MultiServerClient, prompts: List[Prompt], name: str
+def search_and_instantiate_prompt(
+    client: SyncMultiServerClient, prompts: List[Prompt], name: str
 ) -> List[Dict[str, Any]]:
     """Retrieve a prompt by name and convert to OpenAI message format.
 
@@ -66,7 +63,7 @@ async def search_and_instantiate_prompt(
     if prompts:
         for prompt in prompts:
             if prompt.name == name:
-                prompt_result = await client.get_prompt(name, arguments=get_prompt_arguments(prompt))
+                prompt_result = client.get_prompt(name, arguments=get_prompt_arguments(prompt))
 
                 if not prompt_result.messages:
                     return []
@@ -85,8 +82,11 @@ async def search_and_instantiate_prompt(
     return []
 
 
-async def search_and_instantiate_resource(
-    client: MultiServerClient, resources: List[Union[Resource, ResourceTemplate]], name: str, is_template: bool = False
+def search_and_instantiate_resource(
+    client: SyncMultiServerClient,
+    resources: List[Union[Resource, ResourceTemplate]],
+    name: str,
+    is_template: bool = False,
 ) -> str:
     """Retrieve a resource by name from the list of resources.
 
@@ -113,7 +113,7 @@ async def search_and_instantiate_resource(
                         uri = substitute_template_variables(uri_template, var_values)
                     else:
                         uri = uri_template
-                resource_result = await client.read_resource(uri=uri)
+                resource_result = client.read_resource(uri=uri)
                 # Assuming single text message resource
                 resource_result_text = resource_result.contents[0].text if resource_result.contents else ""  # type: ignore[union-attr]
                 print(f"[Result] {resource_result_text}\n")
@@ -121,7 +121,7 @@ async def search_and_instantiate_resource(
     return ""
 
 
-async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = False, model: str = "gpt-5.2") -> None:
+def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = False, model: str = "gpt-5.2") -> None:
     """Run the multi-server chat interface.
 
     Args:
@@ -135,9 +135,9 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
     configure_logging(level="INFO" if verbose else "WARNING")
 
     try:
-        async with MultiServerClient.from_config(config_path) as client:
+        with SyncMultiServerClient.from_config(config_path) as client:
 
-            await client.set_logging_level(level="info" if verbose else "warning")
+            client.set_logging_level(level="info" if verbose else "warning")
 
             # Print capabilities summary
             print_capabilities_summary(client)
@@ -156,7 +156,7 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
             # Chat loop
             messages: List[Dict[str, Any]] = []
-            print("Multi-Server MCP Chat Client")
+            print("Sync-Multi-Server MCP Chat Client")
             print("Type 'exit' or 'quit' to end the conversation\n")
 
             query = input("> ")
@@ -166,7 +166,7 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
                 # Add user message, prompt or resource
                 if query.startswith("+prompt:"):
                     prompt = query[len("+prompt:") :].strip()
-                    prompt_messages = await search_and_instantiate_prompt(client, all_prompts, prompt)
+                    prompt_messages = search_and_instantiate_prompt(client, all_prompts, prompt)
                     if not prompt_messages:
                         print(f"Prompt '{prompt}' not found.")
                     else:
@@ -179,7 +179,7 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
                 if query.startswith("+resource:"):
                     resource_name = query[len("+resource:") :].strip()
-                    resource = await search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
+                    resource = search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
                     if not resource:
                         print(f"Resource '{resource_name}' not found.")
                     else:
@@ -191,7 +191,7 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
                 if query.startswith("+template:"):
                     template_name = query[len("+template:") :].strip()
-                    resource = await search_and_instantiate_resource(
+                    resource = search_and_instantiate_resource(
                         client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
                     )
                     if not resource:
@@ -227,7 +227,7 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
                         # Execute tool via appropriate server
                         try:
-                            tool_result = await client.call_tool(tool_name, tool_args)
+                            tool_result = client.call_tool(tool_name, tool_args)
 
                             # Process tool result content (handles images, audio, text, etc.)
                             # Returns string content (images are converted to text descriptions)
@@ -312,7 +312,7 @@ Examples:
     )
 
     args = parser.parse_args()
-    asyncio.run(chat(config_path=args.config, verbose=args.verbose, model=args.model))
+    sync_chat(config_path=args.config, verbose=args.verbose, model=args.model)
 
 
 if __name__ == "__main__":

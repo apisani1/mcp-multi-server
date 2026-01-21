@@ -19,6 +19,7 @@ from mcp.types import Tool
 
 if TYPE_CHECKING:
     from mcp_multi_server.client import MultiServerClient
+    from mcp_multi_server.sync_client import SyncMultiServerClient
 
 
 def configure_logging(
@@ -82,7 +83,7 @@ def configure_logging(
     library_logger.setLevel(log_level)
 
 
-def print_capabilities_summary(client: "MultiServerClient") -> None:
+def print_capabilities_summary(client: Union["MultiServerClient", "SyncMultiServerClient"]) -> None:
     """Utility function to print a summary of all discovered capabilities in a MultiServerClient object."""
 
     def first_line_preview(text: str = "") -> str:
