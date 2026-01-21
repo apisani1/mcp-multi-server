@@ -13,6 +13,7 @@ A Python library for managing connections to multiple [Model Context Protocol (M
 - **Namespace Support**: Use namespaced URIs for unambiguous resource routing
 - **Collision Detection**: Detect and warn about duplicate tool or prompt names across servers
 - **Async Context Manager**: Clean resource management with Python's async context managers
+- **Sync & Async Support**: Both async (`MultiServerClient`) and synchronous (`SyncMultiServerClient`) interfaces
 
 ## Installation
 
@@ -109,6 +110,27 @@ async with MultiServerClient.from_dict(config.model_dump()) as client:
     # ...
 ```
 
+### 4. Synchronous Client
+
+For non-async code, use the synchronous wrapper:
+
+```python
+from mcp_multi_server import SyncMultiServerClient
+
+# Using context manager (recommended)
+with SyncMultiServerClient.from_config("mcp_servers.json") as client:
+    tools = client.list_tools()
+    result = client.call_tool("read_file", {"path": "/path/to/file.txt"})
+    resources = client.list_resources()
+
+# Or with programmatic configuration
+config = {"mcpServers": {"my_server": {"command": "python", "args": ["-m", "my_server"]}}}
+with SyncMultiServerClient.from_dict(config) as client:
+    tools = client.list_tools()
+```
+
+The sync client runs a background event loop thread and provides the same API as the async client, with optional timeout parameters on blocking methods.
+
 ## Examples
 
 The repository includes comprehensive examples demonstrating various use cases. See the [examples directory](examples/) for:
@@ -136,6 +158,24 @@ Main class for managing multiple MCP servers.
 - `call_tool(name, arguments, server_name=None)` - Call a tool
 - `read_resource(uri, server_name=None)` - Read a resource
 - `get_prompt(name, arguments=None, server_name=None)` - Get a prompt
+
+### SyncMultiServerClient
+
+Synchronous wrapper for non-async code. Same API as MultiServerClient.
+
+**Class Methods:**
+- `from_config(config_path: str)` - Create client from JSON config file
+- `from_dict(config_dict: Dict)` - Create client from configuration dictionary
+
+**Instance Methods:**
+- `list_tools()` - Get all tools from all servers
+- `list_prompts()` - Get all prompts from all servers
+- `list_resources(use_namespace: bool = True)` - Get all resources
+- `list_resource_templates(use_namespace: bool = True)` - Get all resource templates
+- `call_tool(name, arguments, timeout=None, server_name=None)` - Call a tool
+- `read_resource(uri, timeout=None, server_name=None)` - Read a resource
+- `get_prompt(name, arguments=None, timeout=None, server_name=None)` - Get a prompt
+- `shutdown()` - Explicitly shutdown the client
 
 ### Utility Functions
 

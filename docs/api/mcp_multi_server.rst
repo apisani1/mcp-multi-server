@@ -20,6 +20,14 @@ mcp\_multi\_server.config module
    :show-inheritance:
    :undoc-members:
 
+mcp\_multi\_server.sync\_client module
+--------------------------------------
+
+.. automodule:: mcp_multi_server.sync_client
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 mcp\_multi\_server.types module
 -------------------------------
 

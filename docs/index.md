@@ -30,6 +30,7 @@ Automatically discover and aggregate all capabilities (tools, resources, resourc
 - Simple programmatic or file-based configuration
 - Comprehensive error handling
 - Full async/await support
+- Synchronous client option for non-async code
 - Rich logging for debugging
 
 ## Quick Start
@@ -81,6 +82,22 @@ async def main():
 
 asyncio.run(main())
 ```
+
+### Synchronous Usage
+
+For non-async code, use `SyncMultiServerClient`:
+
+```python
+from mcp_multi_server import SyncMultiServerClient
+
+# Using context manager (recommended)
+with SyncMultiServerClient.from_config("mcp_servers.json") as client:
+    tools = client.list_tools()
+    result = client.call_tool("read_file", {"path": "/path/to/file.txt"})
+    resources = client.list_resources()
+```
+
+The sync client runs a background event loop thread and provides the same API as the async client, with optional timeout parameters on blocking methods.
 
 ### Configuration
 
