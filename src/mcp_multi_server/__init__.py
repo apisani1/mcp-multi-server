@@ -27,6 +27,17 @@ Examples:
     >>> async with MultiServerClient.from_dict(config.model_dump()) as client:
     ...     tools = client.list_tools()
 
+    Synchronous client (for non-async code):
+    >>> from mcp_multi_server import SyncMultiServerClient
+    >>> with SyncMultiServerClient.from_config("mcp_servers.json") as client:
+    ...     tools = client.list_tools()
+    ...     result = client.call_tool("my_tool", {"arg": "value"})
+
+    Sync client with programmatic configuration:
+    >>> config = {"mcpServers": {"my_server": {"command": "python", "args": ["-m", "my_server"]}}}
+    >>> with SyncMultiServerClient.from_dict(config) as client:
+    ...     resources = client.list_resources()
+
     OpenAI integration:
     >>> from mcp_multi_server import mcp_tools_to_openai_format
     >>> tools = client.list_tools()
@@ -52,6 +63,7 @@ from .config import (
     MCPServersConfig,
     ServerConfig,
 )
+from .sync_client import SyncMultiServerClient
 from .types import ServerCapabilities
 from .utils import (
     configure_logging,
@@ -64,8 +76,9 @@ from .utils import (
 
 
 __all__ = [
-    # Main client class
+    # Main client classes
     "MultiServerClient",
+    "SyncMultiServerClient",
     # Configuration models
     "ServerConfig",
     "MCPServersConfig",
