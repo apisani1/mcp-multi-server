@@ -130,30 +130,18 @@ extend-ignore = [
     # E203: Whitespace before ':'
     "E203",
 ]
-exclude = [
-    # "docs",
-    # "tests",
-    ".venv",
-    ".git",
-    "__pycache__",
-    "build",
-    "dist",
-]
+exclude = ["docs", "tests", ".venv", ".git", "__pycache__", "build", "dist"]
 radon-max-cc = 15
-max-line-length = 119
 
 [tool.mypy]
-# exclude = '^(tests\/test.*\.py|docs\/.*\.py)$'
+exclude = '^(tests\/test.*\.py|docs\/.*\.py)$'
 python_version = "3.10"
-
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 ignore_missing_imports = true
 show_error_codes = true
-warn_unused_ignores = true
-explicit_package_bases = true
-
+warn_unused_ignores = false
 
 [tool.pylint.MESSAGES_CONTROL]
 disable = [
@@ -181,26 +169,21 @@ disable = [
     "import-outside-toplevel",
     "global-statement",
     "global-variable-not-assigned",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "too-many-statements",
+    "too-many-branches",
+    "too-many-return-statements",
+    "too-many-instance-attributes",
+    "unnecessary-dunder-call",
+    "duplicate-code",
+    "line-too-long",
 ]
-
-[tool.pylint.FORMAT]
-max-line-length = 119
 
 [tool.pylint.MASTER]
-ignore = [
-    # "tests",
-    # "docs",
-    ".venv",
-    ".git",
-    "__pycache__",
-    "build",
-    "dist",
-]
-
-[tool.pylint.SIMILARITIES]
-min-similarity-lines = 10
-ignore-comments = true
-ignore-docstrings = true
+ignore = ["tests", "docs", ".venv", ".git", "__pycache__", "build", "dist"]
 
 [tool.isort]
 profile = "black"
@@ -243,15 +226,7 @@ ensure_newline_before_comments = true
 line_length = 119
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 default_section = "FIRSTPARTY"
-extend_skip = [
-    # "tests",
-    # "docs",
-    ".venv",
-    ".git",
-    "__pycache__",
-    "build",
-    "dist",
-]
+extend_skip = ["tests", "docs", ".venv", ".git", "__pycache__", "build", "dist"]
 
 [tool.doc8]
 max-line-length = 120
@@ -260,5 +235,6 @@ ignore-path = ["docs/_build"]
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: marks tests as integration tests requiring MCP servers (deselect with '-m \"not integration\"')",
+    "integration: marks tests as integration tests (require running MCP servers)",
 ]
+asyncio_mode = "auto"

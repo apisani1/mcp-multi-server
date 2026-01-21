@@ -377,7 +377,7 @@ class MultiServerClient:
             )
         if level == "notice":
             level = "warning"
-        elif level == "alert" or level == "emergency":
+        elif level in ("alert", "emergency"):
             level = "critical"
         for server_name, session in self.sessions.items():
             try:

@@ -1,0 +1,37 @@
+{
+  "mcpServers": {
+    "Inventory Prompt Server": {
+      "command": "/Users/antonio/.local/bin/poetry",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/antonio/AI/MyCode/mcp-multi-server/",
+        "python3",
+        "-m",
+        "examples.servers.prompt_server"
+      ]
+    },
+    "Inventory Resource Server": {
+      "command": "/Users/antonio/.local/bin/poetry",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/antonio/AI/MyCode/mcp-multi-server/",
+        "python3",
+        "-m",
+        "examples.servers.resource_server"
+      ]
+    },
+    "Inventory Tool Server": {
+      "command": "/Users/antonio/.local/bin/poetry",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/antonio/AI/MyCode/mcp-multi-server/",
+        "python3",
+        "-m",
+        "examples.servers.tool_server"
+      ]
+    }
+  }
+}
