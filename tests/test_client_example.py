@@ -76,7 +76,7 @@ async def test_simple_prompt() -> None:
     async with MultiServerClient.from_config("examples/mcp_servers.json") as client:
 
         prompts_result = client.list_prompts()
-        all_prompts = prompts_result.prompts
+        all_prompts = {prompt.name: prompt for prompt in prompts_result.prompts}
         prompt_messages = await search_and_instantiate_prompt(client, all_prompts, "inventory_check")
 
         assert (
@@ -95,7 +95,7 @@ async def test_prompt_not_found() -> None:
     async with MultiServerClient.from_config("examples/mcp_servers.json") as client:
 
         prompts_result = client.list_prompts()
-        all_prompts = prompts_result.prompts
+        all_prompts = {prompt.name: prompt for prompt in prompts_result.prompts}
         prompt_messages = await search_and_instantiate_prompt(client, all_prompts, "nonexistent_prompt")
 
         assert len(prompt_messages) == 0, "Expected empty list for non-existent prompt"
@@ -108,7 +108,7 @@ async def test_resource() -> None:
     async with MultiServerClient.from_config("examples/mcp_servers.json") as client:
 
         resource_result = client.list_resources()
-        all_resources = resource_result.resources
+        all_resources = {resource.name: resource for resource in resource_result.resources}
         resource = await search_and_instantiate_resource(client, all_resources, "get_database_schema")  # type: ignore
 
         assert "{" in resource and "}" in resource, "Expected JSON content in resource"
@@ -121,7 +121,7 @@ async def test_resource_not_found() -> None:
     async with MultiServerClient.from_config("examples/mcp_servers.json") as client:
 
         resource_result = client.list_resources()
-        all_resources = resource_result.resources
+        all_resources = {resource.name: resource for resource in resource_result.resources}
         resource = await search_and_instantiate_resource(client, all_resources, "nonexistent_resource")  # type: ignore
 
         assert resource == "", "Expected empty string for non-existent resource"

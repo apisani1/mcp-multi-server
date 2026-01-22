@@ -47,52 +47,47 @@ load_dotenv(find_dotenv())
 
 
 def search_and_instantiate_prompt(
-    client: SyncMultiServerClient, prompts: List[Prompt], name: str
+    client: SyncMultiServerClient, prompts: Dict[str, Prompt], name: str
 ) -> List[Dict[str, Any]]:
     """Retrieve a prompt by name and convert to OpenAI message format.
 
     Args:
-        client: MultiServerClient instance.
-        prompts: List of prompts available from all MCP servers connected to the client.
+        client: SyncMultiServerClient instance.
+        prompts: Dict of prompts available from all MCP servers connected to the client.
         name: Name of the prompt to retrieve.
 
     Returns:
         List of OpenAI-formatted messages with proper image/audio support.
 
     """
+    prompt: Union[Prompt, None]
     if prompts:
-        for prompt in prompts:
-            if prompt.name == name:
-                prompt_result = client.get_prompt(name, arguments=get_prompt_arguments(prompt))
-
-                if not prompt_result.messages:
-                    return []
-
+        prompt = prompts.get(name)
+        if prompt:
+            prompt_result = client.get_prompt(name, arguments=get_prompt_arguments(prompt))
+            if prompt_result.messages:
                 openai_messages = []
                 for msg in prompt_result.messages:
                     # Display content to user (shows images/audio locally)
                     handle_content_block(msg.content)
-
                     # Convert to OpenAI message format (string for text, array for media)
                     content = convert_mcp_content_to_message(msg.content)
-
                     openai_messages.append({"role": msg.role, "content": content})
-
                 return openai_messages
     return []
 
 
 def search_and_instantiate_resource(
     client: SyncMultiServerClient,
-    resources: List[Union[Resource, ResourceTemplate]],
+    resources: Dict[str, Union[Resource, ResourceTemplate]],
     name: str,
     is_template: bool = False,
 ) -> str:
     """Retrieve a resource by name from the list of resources.
 
     Args:
-        client: MultiServerClient instance.
-        resources: List of resources available from all MCP servers connected to the client.
+        client: SyncMultiServerClient instance.
+        resources: Dict of resources available from all MCP servers connected to the client.
         name: Name of the resource to retrieve.
 
     Returns:
@@ -100,24 +95,24 @@ def search_and_instantiate_resource(
 
     """
     if resources:
-        for resource in resources:
-            if resource.name == name:
-                if not is_template:
-                    uri = resource.uri  # type: ignore[union-attr]
+        resource = resources.get(name)
+        if resource:
+            if not is_template:
+                uri = resource.uri  # type: ignore[union-attr]
+            else:
+                uri_template = resource.uriTemplate  # type: ignore[union-attr]
+                variables = extract_template_variables(uri_template)
+                print(f"Variables in template: {variables}")
+                if variables:
+                    var_values = get_template_variables_from_user(uri_template)
+                    uri = substitute_template_variables(uri_template, var_values)
                 else:
-                    uri_template = resource.uriTemplate  # type: ignore[union-attr]
-                    variables = extract_template_variables(uri_template)
-                    print(f"Variables in template: {variables}")
-                    if variables:
-                        var_values = get_template_variables_from_user(uri_template)
-                        uri = substitute_template_variables(uri_template, var_values)
-                    else:
-                        uri = uri_template
-                resource_result = client.read_resource(uri=uri)
-                # Assuming single text message resource
-                resource_result_text = resource_result.contents[0].text if resource_result.contents else ""  # type: ignore[union-attr]
-                print(f"[Result] {resource_result_text}\n")
-                return resource_result_text
+                    uri = uri_template
+            resource_result = client.read_resource(uri=uri)
+            # Assuming single text message resource
+            resource_result_text = resource_result.contents[0].text if resource_result.contents else ""  # type: ignore[union-attr]
+            print(f"[Result] {resource_result_text}\n")
+            return resource_result_text
     return ""
 
 
@@ -143,9 +138,11 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
             print_capabilities_summary(client)
 
             # Fetch all prompts and resources from all servers
-            all_prompts = client.list_prompts().prompts
-            all_resources = client.list_resources().resources
-            all_resource_templates = client.list_resource_templates().resourceTemplates
+            all_prompts = {prompt.name: prompt for prompt in client.list_prompts().prompts}
+            all_resources = {resource.name: resource for resource in client.list_resources().resources}
+            all_resource_templates = {
+                template.name: template for template in client.list_resource_templates().resourceTemplates
+            }
 
             # Get tools from all servers and convert them to OpenAI format
             tools_result = client.list_tools().tools or []
@@ -167,25 +164,25 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
                 if query.startswith("+prompt:"):
                     prompt = query[len("+prompt:") :].strip()
                     prompt_messages = search_and_instantiate_prompt(client, all_prompts, prompt)
-                    if not prompt_messages:
-                        print(f"Prompt '{prompt}' not found.")
-                    else:
+                    if prompt_messages:
                         if verbose:
                             print("****Retrieved prompt content (displayed above)\n")
                         # Add all prompt messages to conversation (supports multiple messages)
                         messages.extend(prompt_messages)
+                    else:
+                        print(f"Prompt '{prompt}' not found.")
                     query = input("> ")
                     continue
 
                 if query.startswith("+resource:"):
                     resource_name = query[len("+resource:") :].strip()
                     resource = search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
-                    if not resource:
-                        print(f"Resource '{resource_name}' not found.")
-                    else:
+                    if resource:
                         if verbose:
                             print("****Retrieved resource content (displayed above)\n")
                         messages.append({"role": "user", "content": resource})
+                    else:
+                        print(f"Resource '{resource_name}' not found.")
                     query = input("> ")
                     continue
 
@@ -194,12 +191,12 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
                     resource = search_and_instantiate_resource(
                         client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
                     )
-                    if not resource:
-                        print(f"Resource Template '{template_name}' not found.")
-                    else:
+                    if resource:
                         if verbose:
                             print("****Instantiated template content (displayed above)\n")
                         messages.append({"role": "user", "content": resource})
+                    else:
+                        print(f"Resource Template '{template_name}' not found.")
                     query = input("> ")
                     continue
 
