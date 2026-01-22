@@ -1,7 +1,6 @@
 # Changelog
 
-
-## [1.0.1b1] - 2026-01-21
+## [1.1.0] - 2026-01-22
 
  ### Changes
 - 📝 docs: add SyncMultiServerClient documentation
@@ -13,4 +12,3 @@
 
  ### Changes
 - First Release
-
