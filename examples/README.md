@@ -10,12 +10,14 @@ examples/
 │   ├── tool_server.py      # Server providing tools (inventory CRUD operations)
 │   ├── resource_server.py  # Server providing resources (read-only inventory data)
 │   └── prompt_server.py    # Server providing prompts (inventory-focused prompt templates)
-├── client/           # Example client implementation
-│   └── chat_client.py      # Multi-server chat with OpenAI integration
+├── client/           # Example client implementations
+│   ├── chat_client.py      # Async multi-server chat with OpenAI integration
+│   └── sync_chat_client.py # Sync multi-server chat with OpenAI integration
 ├── support/          # Supporting modules
 │   ├── inventory_db.py     # Inventory database with pickle persistence
 │   ├── initialize_db.py    # Database initialization script
-│   └── media_handler.py    # Media file handling utilities
+│   ├── media_handler.py    # Media file handling utilities
+│   └── mcp.py              # Common MCP utilities for chat clients
 ├── assets/           # Media assets for examples
 │   ├── picture.jpg
 │   └── sound.mp3
@@ -165,11 +167,11 @@ python -m examples.servers.prompt_server
 - `load_file` - Load any file as embedded BlobResource
 - `load_uri_content` - Create ResourceLink for content URI
 
-## Example Client
+## Example Clients
 
-### Multi-Server Chat Client ([client/chat_client.py](client/chat_client.py))
+### Async Chat Client ([client/chat_client.py](client/chat_client.py))
 
-**PRIMARY EXAMPLE** - Full-featured chat interface integrating all three MCP servers with OpenAI.
+**PRIMARY EXAMPLE** - Full-featured async chat interface integrating all three MCP servers with OpenAI.
 
 **Features:**
 - Automatically starts and connects to all configured servers
@@ -190,6 +192,27 @@ poetry run python3 -m examples.client.chat_client
 # Or manually with python (servers auto-start via mcp_servers.json)
 python -m examples.client.chat_client
 ```
+
+### Sync Chat Client ([client/sync_chat_client.py](client/sync_chat_client.py))
+
+Synchronous version of the chat client using `SyncMultiServerClient`. Identical functionality to the async client but uses blocking calls instead of async/await.
+
+**Run the client:**
+```bash
+# Using Makefile
+make run-sync-chat
+
+# Or manually with poetry
+poetry run python3 -m examples.client.sync_chat_client
+
+# Or manually with python
+python -m examples.client.sync_chat_client
+```
+
+**When to use:**
+- Non-async codebases that can't use `async`/`await`
+- Simple scripts where async complexity isn't needed
+- Integration with synchronous frameworks
 
 **Usage:**
 - **Normal chat**: Type your message and press Enter
@@ -271,6 +294,25 @@ async def main():
         print(result)
 
 asyncio.run(main())
+```
+
+### Synchronous Multi-Server Setup
+
+```python
+from mcp_multi_server import SyncMultiServerClient
+
+# Using context manager (recommended)
+with SyncMultiServerClient.from_config("examples/mcp_servers.json") as client:
+    # Print what's available
+    client.print_capabilities_summary()
+
+    # List all tools from all servers
+    tools = client.list_tools()
+    print(f"Total tools: {len(tools.tools)}")
+
+    # Call a tool (auto-routed to correct server)
+    result = client.call_tool("list_products", {})
+    print(result)
 ```
 
 ### OpenAI Integration
@@ -362,7 +404,9 @@ poetry install --extras examples
 export OPENAI_API_KEY="your-key-here"
 
 # 3. Run the chat client (auto-starts all servers)
-make run-chat
+make run-chat          # async version
+# or
+make run-sync-chat     # sync version
 
 # 4. Try some queries
 > Show me the inventory overview
