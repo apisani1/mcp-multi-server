@@ -194,7 +194,7 @@ Coming soon - uncomment as guides are created:
 
 ## Project Status
 
-- **Version**: 1.0.1b1
+- **Version**: 1.1.0b1
 - **Status**: Production Ready
 - **Python**: 3.10+
 - **Test Coverage**: 81%
