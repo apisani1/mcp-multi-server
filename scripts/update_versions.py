@@ -7,7 +7,11 @@ from pathlib import Path
 try:
     import tomllib  # Part of the standard library on Python 3.11+
 except ImportError:
-    import tomli as tomllib  # For Python < 3.11
+    try:
+        import tomli as tomllib  # For Python < 3.11
+    except ImportError:
+        print("Neither tomllib nor tomli is available. Please install tomli package.")
+        sys.exit(1)
 
 
 def update_files(new_version: str, dry_run: bool = False) -> None:
