@@ -93,6 +93,12 @@ function venv {
     SHELL=/bin/zsh exec poetry shell
 }
 
+function venv:clean {
+    echo "Recreating virtual environment..."
+    rm -rf .venv
+    venv
+}
+
 # Lock dependencies without installing them
 function lock {
     echo "Locking dependencies..."
@@ -463,19 +469,113 @@ function build {
     poetry build
 }
 
-# Publish to TestPyPI
-function publish:test {
-    echo "Publishing to TestPyPI..."
-    try-load-dotenv || true  # Load .env file if it exists
-    poetry config repositories.testpypi https://test.pypi.org/legacy/
-    poetry publish -r testpypi
+################################################################################
+# config_get
+#
+# Lookup a configuration value using the following precedence:
+#   1. .env file (project-local)
+#   2. Environment variable
+#
+# Returns:
+#   - value on stdout
+#   - non-zero exit code if not found
+################################################################################
+config_get() {
+    local key="$1"
+    local file="$THIS_DIR/.env"
+    local value
+
+    # 1. Check .env first (project-first policy)
+    if [[ -f "$file" ]]; then
+        value="$(
+            sed -n \
+                -e "s/^${key}=[\"']\{0,1\}\(.*\)[\"']\{0,1\}$/\1/p" \
+                "$file"
+        )"
+
+        # If key is defined in .env (even if empty), return it
+        if [[ -n "$value" || $(grep -q "^${key}=" "$file"; echo $?) -eq 0 ]]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
+    fi
+
+    # 2. Fallback to environment
+    value="${!key:-}"
+    if [[ -n "$value" ]]; then
+        printf '%s\n' "$value"
+        return 0
+    fi
+
+    # 3. Not found
+    return 1
 }
 
-# Publish to PyPI
+# Publish to TestPyPI, non strictly requiring token
+function publish:test {
+    echo "Publishing to TestPyPI..."
+
+    local token
+    token="$(config_get TEST_PYPI_TOKEN)" || true
+
+    poetry config repositories.testpypi https://test.pypi.org/legacy/
+
+    if [[ -n "$token" ]]; then
+        POETRY_PYPI_TOKEN_TESTPYPI="$token" poetry publish -r testpypi
+    else
+        poetry publish -r testpypi
+    fi
+}
+
+# Publish to TestPyPI, strictly requiring token
+function publish:test:strict {
+    echo "Publishing to TestPyPI (strict mode)..."
+
+    local token
+    token="$(config_get TEST_PYPI_TOKEN)" || {
+        echo "Error: TEST_PYPI_TOKEN not found in environment or .env"
+        return 1
+    }
+
+    [[ -n "$token" ]] || {
+        echo "Error: TEST_PYPI_TOKEN is empty"
+        return 1
+    }
+
+    poetry config repositories.testpypi https://test.pypi.org/legacy/
+    POETRY_PYPI_TOKEN_TESTPYPI="$token" poetry publish -r testpypi
+}
+
+# Publish to PyPI, non strictly requiring token
 function publish {
     echo "Publishing to PyPI..."
-    try-load-dotenv || true  # Load .env file if it exists
-    poetry publish
+
+    local token
+    token="$(config_get PYPI_TOKEN)" || true
+
+    if [[ -n "$token" ]]; then
+        POETRY_PYPI_TOKEN_PYPI="$token" poetry publish
+    else
+        poetry publish
+    fi
+}
+
+# Publish to PyPI, strictly requiring token
+function publish:strict {
+    echo "Publishing to PyPI (strict mode)..."
+
+    local token
+    token="$(config_get PYPI_TOKEN)" || {
+        echo "Error: PYPI_TOKEN not found in environment or .env"
+        return 1
+    }
+
+    [[ -n "$token" ]] || {
+        echo "Error: PYPI_TOKEN is empty"
+        return 1
+    }
+
+    POETRY_PYPI_TOKEN_PYPI="$token" poetry publish
 }
 
 # Validate that package builds correctly
@@ -505,43 +605,97 @@ function get:changes {
 function release:major {
     echo "Creating major release..."
     changes=$(get:changes)
-    python scripts/release.py create major --changes "$changes"
+    python3 scripts/release.py create major --changes "$changes"
 }
 
 function release:minor {
     echo "Creating minor release..."
     changes=$(get:changes)
-    python scripts/release.py create minor --changes "$changes"
+    python3 scripts/release.py create minor --changes "$changes"
 }
 
 function release:micro {
     echo "Creating micro release..."
     changes=$(get:changes)
-    python scripts/release.py create micro --changes "$changes"
+    python3 scripts/release.py create micro --changes "$changes"
 }
 
 function release:rc {
     echo "Creating release candidate..."
     changes=$(get:changes)
-    python scripts/release.py create micro --pre rc --changes "$changes"
+    python3 scripts/release.py create micro --pre rc --changes "$changes"
 }
 
 function release:beta {
     echo "Creating beta release..."
     changes=$(get:changes)
-    python scripts/release.py create micro --pre b --changes "$changes"
+    python3 scripts/release.py create micro --pre b --changes "$changes"
 }
 
 function release:alpha {
     echo "Creating alpha release..."
     changes=$(get:changes)
-    python scripts/release.py create micro --pre a --changes "$changes"
+    python3 scripts/release.py create micro --pre a --changes "$changes"
+}
+
+function release:major:a {
+    echo "Creating major alpha release..."
+    changes=$(get:changes)
+    python3 scripts/release.py create major --pre a --changes "$changes"
+}
+
+function release:major:b {
+    echo "Creating major beta release..."
+    changes=$(get:changes)
+    python3 scripts/release.py create major --pre b --changes "$changes"
+}
+
+function release:major:rc {
+    echo "Creating major release candidate..."
+    changes=$(get:changes)
+    python3 scripts/release.py create major --pre rc --changes "$changes"
+}
+
+function release:minor:a {
+    echo "Creating minor alpha release..."
+    changes=$(get:changes)
+    python3 scripts/release.py create minor --pre a --changes "$changes"
+}
+
+function release:minor:b {
+    echo "Creating minor beta release..."
+    changes=$(get:changes)
+    python3 scripts/release.py create minor --pre b --changes "$changes"
+}
+
+function release:minor:rc {
+    echo "Creating minor release candidate..."
+    changes=$(get:changes)
+    python3 scripts/release.py create minor --pre rc --changes "$changes"
+}
+
+function release:micro:a {
+    echo "Creating micro alpha release..."
+    changes=$(get:changes)
+    python3 scripts/release.py create micro --pre a --changes "$changes"
+}
+
+function release:micro:b {
+    echo "Creating micro beta release..."
+    changes=$(get:changes)
+    python3 scripts/release.py create micro --pre b --changes "$changes"
+}
+
+function release:micro:rc {
+    echo "Creating micro release candidate..."
+    changes=$(get:changes)
+    python3 scripts/release.py create micro --pre rc --changes "$changes"
 }
 
 # Rollback release
 function rollback {
     echo "Rolling back last release..."
-    python scripts/release.py rollback
+    python3 scripts/release.py rollback
 }
 
 # Helper function to show available release commands
@@ -553,6 +707,15 @@ function help:release {
     echo "  release:rc      - Create release candidate"
     echo "  release:beta    - Create beta release"
     echo "  release:alpha   - Create alpha release"
+    echo "  release:major:a - Create major alpha release"
+    echo "  release:major:b - Create major beta release"
+    echo "  release:major:rc- Create major release candidate"
+    echo "  release:minor:a - Create minor alpha release"
+    echo "  release:minor:b - Create minor beta release"
+    echo "  release:minor:rc- Create minor release candidate"
+    echo "  release:micro:a - Create micro alpha release"
+    echo "  release:micro:b - Create micro beta release"
+    echo "  release:micro:rc- Create micro release candidate"
     echo "  rollback        - Rollback last release"
 }
 
