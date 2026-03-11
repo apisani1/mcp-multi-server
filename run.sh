@@ -322,6 +322,14 @@ function tests {
     poetry run pytest "$TEST_FILE" "$@"
 }
 
+# Run tests excluding integration tests (for CI)
+function tests:ci {
+    echo "Running tests (excluding integration)..."
+    TEST_FILE="${1:-$(get:python:files:tests)}"
+    shift || true
+    poetry run pytest "$TEST_FILE" -m "not integration" "$@"
+}
+
 # Run tests with coverage
 function tests:cov {
     echo "Running tests with coverage..."

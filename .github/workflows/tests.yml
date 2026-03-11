@@ -62,4 +62,4 @@ jobs:
         run: ./run.sh lint:flake8
 
       - name: Run tests
-        run: ./run.sh tests "" -m "not integration" || [ $? -eq 5 ]
+        run: ./run.sh tests:ci || [ $? -eq 5 ]
