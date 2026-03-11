@@ -45,3 +45,6 @@ ENV/
 .DS_Store
 *.pkl
 *.pickle
+
+# Obsidian project notes (local only)
+notes/

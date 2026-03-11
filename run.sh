@@ -4,6 +4,15 @@ set -e
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
+# Ensure 'python' resolves to Python 3 (Poetry 2.x requires it).
+# On some systems Python 2.7 takes precedence on PATH.
+if ! python --version 2>&1 | grep -q "^Python 3"; then
+    _TMPBIN=$(mktemp -d)
+    ln -sf "$(which python3)" "$_TMPBIN/python"
+    export PATH="$_TMPBIN:$PATH"
+    trap "rm -rf '$_TMPBIN'" EXIT
+fi
+
 ######################
 # ENVIRONMENT
 ######################
