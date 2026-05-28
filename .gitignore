@@ -48,3 +48,8 @@ ENV/
 
 # Obsidian project notes (local only)
 notes/
+
+# sdk-migration-manager skill — test workspace and run artifacts (local only)
+.claude/skills/sdk-migration-manager-workspace/
+.claude/migration-reports/
+.claude/scheduled_tasks.lock

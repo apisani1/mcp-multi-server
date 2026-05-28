@@ -1,0 +1,26 @@
+{
+  "skill_name": "sdk-migration-manager",
+  "evals": [
+    {
+      "id": 0,
+      "name": "nl-audit-1.13-to-1.27",
+      "prompt": "We're stuck on mcp 1.13.1 in this repo and I want to move us to 1.27 before the v2 SDK drops. Can you audit the codebase and tell me what's going to break? I just want a read on the risks right now — no plan yet.",
+      "expected_output": "An audit run that produces .claude/migration-reports/<ts>/ containing risks.json and summary.md. Findings should include at least: the mcp pin in pyproject.toml (Dependency-pin), and acknowledgment that no OAuth/FastMCP/Tasks usage exists. No code edits.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "slash-plan-explicit-versions",
+      "prompt": "/sdk-migration-manager plan 1.13.1 1.27.1",
+      "expected_output": "A plan run that produces plan.md + checklist.md + risks.json + summary.md. plan.md should have phases 0 (dependency pin) through 5 (Tasks adoption). checklist.md should use GitHub-style task lists with phase numbering matching plan.md. The `latest` pointer file should be updated.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "ci-headless-audit-json",
+      "prompt": "I want to wire this into our GitHub Actions pipeline so we get blocked on regressions before they ship. Show me the exact CI step and run the audit in headless mode so I can see the risks.json payload that would be emitted.",
+      "expected_output": "An audit run in --ci --json mode that emits risks.json to stdout and writes to disk. Includes a CI integration recipe (markdown only, no YAML files written outside the references/ docs). Reports exit code semantics.",
+      "files": []
+    }
+  ]
+}
