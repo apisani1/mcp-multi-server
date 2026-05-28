@@ -93,3 +93,5 @@ make build                # Build package with Poetry
 make validate-build       # Validate package builds correctly
 make clean                # Clean build artifacts
 ```
+
+See @./notes for additional private information
