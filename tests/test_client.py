@@ -1,5 +1,12 @@
 """Tests for MultiServerClient class."""
 
+# The repo-level pylint config already excludes tests/ via [tool.pylint.MASTER] ignore. This
+# file-level disable keeps the diff-based pre-commit lint consistent with that intent when a
+# test file is passed explicitly: tests reach into client internals (protected-access),
+# read clearly with `== {}` assertions (use-implicit-booleaness-not-comparison), and grow
+# long (too-many-lines) — none of which CI enforces for tests.
+# pylint: disable=protected-access,use-implicit-booleaness-not-comparison,too-many-lines
+
 import json
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -20,8 +27,11 @@ from pydantic import (
     ValidationError,
 )
 
+import anyio
 from mcp.shared.exceptions import McpError
 from mcp.types import (
+    METHOD_NOT_FOUND,
+    ErrorData,
     ListPromptsResult,
     ListResourcesResult,
     ListResourceTemplatesResult,
@@ -35,6 +45,16 @@ from mcp_multi_server.config import (
     ServerConfig,
 )
 from mcp_multi_server.types import ServerCapabilities
+
+
+def _mock_session_empty_discovery(session: MagicMock) -> MagicMock:
+    """Wire a mock ClientSession so capability discovery returns empty (awaitable) results."""
+    session.initialize = AsyncMock()
+    session.list_tools = AsyncMock(return_value=ListToolsResult(tools=[]))
+    session.list_resources = AsyncMock(return_value=ListResourcesResult(resources=[]))
+    session.list_resource_templates = AsyncMock(return_value=ListResourceTemplatesResult(resourceTemplates=[]))
+    session.list_prompts = AsyncMock(return_value=ListPromptsResult(prompts=[]))
+    return session
 
 
 # ============================================================================
@@ -100,7 +120,7 @@ class TestFromConfigClassMethod:
         client2 = MultiServerClient.from_config(sample_config_file)
 
         assert client1.config_path == client2.config_path
-        assert type(client1._config) == type(client2._config)
+        assert type(client1._config) is type(client2._config)
 
 
 class TestFromDictClassMethod:
@@ -201,9 +221,7 @@ class TestConnectionManagement:
     """Tests for server connection management."""
 
     @pytest.mark.asyncio
-    async def test_async_with_connects_all_servers(
-        self, sample_config_dict: Dict[str, Any], mock_tool_server: MagicMock
-    ) -> None:
+    async def test_async_with_connects_all_servers(self, sample_config_dict: Dict[str, Any]) -> None:
         """Test successful connection to a server."""
         client = MultiServerClient.from_dict(sample_config_dict)
 
@@ -213,8 +231,7 @@ class TestConnectionManagement:
             mock_stdio.return_value.__aexit__ = AsyncMock()
 
             with patch("mcp_multi_server.client.ClientSession") as mock_session_class:
-                mock_session = MagicMock()
-                mock_session.initialize = AsyncMock()
+                mock_session = _mock_session_empty_discovery(MagicMock())
                 mock_session_class.return_value = mock_session
 
                 async with client:
@@ -234,8 +251,7 @@ class TestConnectionManagement:
             mock_stdio.return_value.__aexit__ = AsyncMock()
 
             with patch("mcp_multi_server.client.ClientSession") as mock_session_class:
-                mock_session = MagicMock()
-                mock_session.initialize = AsyncMock()
+                mock_session = _mock_session_empty_discovery(MagicMock())
                 mock_session_class.return_value = mock_session
 
                 async with client as ctx_client:
@@ -246,6 +262,102 @@ class TestConnectionManagement:
                     assert "tool_server" in client.sessions
                     assert "resource_server" in client.sessions
                     assert "prompt_server" in client.sessions
+
+
+class TestConnectionErrorHandling:
+    """Tests for strict_connect policy and transport-death handling during discovery."""
+
+    @staticmethod
+    def _one_server_config() -> Dict[str, Any]:
+        return {"mcpServers": {"flaky": {"command": "python", "args": ["-m", "flaky_server"]}}}
+
+    @pytest.mark.asyncio
+    async def test_transport_death_drops_server_by_default(self) -> None:
+        """A server whose transport dies mid-discovery is dropped; remaining state is clean."""
+        client = MultiServerClient.from_dict(self._one_server_config())
+        tool = Tool(name="t1", description="d", inputSchema={"type": "object"})
+
+        with patch("mcp_multi_server.client.stdio_client") as mock_stdio:
+            mock_stdio.return_value.__aenter__ = AsyncMock(return_value=(MagicMock(), MagicMock()))
+            mock_stdio.return_value.__aexit__ = AsyncMock()
+            with patch("mcp_multi_server.client.ClientSession") as mock_session_class:
+                session = MagicMock()
+                session.initialize = AsyncMock()
+                # tools succeed (and get mapped), then the transport dies on resources
+                session.list_tools = AsyncMock(return_value=ListToolsResult(tools=[tool]))
+                session.list_resources = AsyncMock(side_effect=anyio.ClosedResourceError())
+                mock_session_class.return_value = session
+
+                async with AsyncExitStack() as stack:
+                    # default strict_connect=False -> connect_all swallows and continues
+                    await client.connect_all(stack)
+                    assert "flaky" not in client.sessions
+                    assert "flaky" not in client.capabilities
+                    # registration is deferred, so the tool mapped before the failure was
+                    # never committed to the client
+                    assert client.tool_to_server == {}
+
+    @pytest.mark.asyncio
+    async def test_transport_death_raises_when_strict(self) -> None:
+        """With strict_connect=True, a transport death during discovery propagates."""
+        client = MultiServerClient.from_dict(self._one_server_config(), strict_connect=True)
+
+        with patch("mcp_multi_server.client.stdio_client") as mock_stdio:
+            mock_stdio.return_value.__aenter__ = AsyncMock(return_value=(MagicMock(), MagicMock()))
+            mock_stdio.return_value.__aexit__ = AsyncMock()
+            with patch("mcp_multi_server.client.ClientSession") as mock_session_class:
+                session = MagicMock()
+                session.initialize = AsyncMock()
+                session.list_tools = AsyncMock(return_value=ListToolsResult(tools=[]))
+                session.list_resources = AsyncMock(side_effect=anyio.ClosedResourceError())
+                mock_session_class.return_value = session
+
+                async with AsyncExitStack() as stack:
+                    with pytest.raises(anyio.ClosedResourceError):
+                        await client.connect_all(stack)
+                    # even when raising, the server is not left as a zombie
+                    assert "flaky" not in client.sessions
+
+    @pytest.mark.asyncio
+    async def test_missing_capability_keeps_server(self) -> None:
+        """A server that legitimately lacks a capability (McpError) is retained, not dropped."""
+        client = MultiServerClient.from_dict(self._one_server_config())
+
+        with patch("mcp_multi_server.client.stdio_client") as mock_stdio:
+            mock_stdio.return_value.__aenter__ = AsyncMock(return_value=(MagicMock(), MagicMock()))
+            mock_stdio.return_value.__aexit__ = AsyncMock()
+            with patch("mcp_multi_server.client.ClientSession") as mock_session_class:
+                session = MagicMock()
+                session.initialize = AsyncMock()
+                session.list_tools = AsyncMock(return_value=ListToolsResult(tools=[]))
+                session.list_resources = AsyncMock(return_value=ListResourcesResult(resources=[]))
+                session.list_resource_templates = AsyncMock(
+                    return_value=ListResourceTemplatesResult(resourceTemplates=[])
+                )
+                # server does not implement prompts -> SDK raises McpError (method not found)
+                session.list_prompts = AsyncMock(
+                    side_effect=McpError(ErrorData(code=METHOD_NOT_FOUND, message="Method not found"))
+                )
+                mock_session_class.return_value = session
+
+                async with AsyncExitStack() as stack:
+                    await client.connect_all(stack)
+                    # server retained with the capabilities it does provide
+                    assert "flaky" in client.sessions
+                    assert "flaky" in client.capabilities
+                    assert client.capabilities["flaky"].prompts is None
+
+    def test_strict_connect_resolves_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """strict_connect: explicit arg wins; otherwise the env var is consulted."""
+        monkeypatch.setenv("MCP_MULTI_SERVER_STRICT_CONNECT", "true")
+        assert MultiServerClient.from_dict(self._one_server_config()).strict_connect is True
+
+        monkeypatch.setenv("MCP_MULTI_SERVER_STRICT_CONNECT", "0")
+        assert MultiServerClient.from_dict(self._one_server_config()).strict_connect is False
+
+        # explicit argument overrides the environment
+        monkeypatch.setenv("MCP_MULTI_SERVER_STRICT_CONNECT", "true")
+        assert MultiServerClient.from_dict(self._one_server_config(), strict_connect=False).strict_connect is False
 
 
 class TestCapabilityAggregation:
