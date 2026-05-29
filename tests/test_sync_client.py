@@ -1,5 +1,11 @@
 """Tests for SyncMultiServerClient class."""
 
+# Tests reach into client internals (e.g. _shutdown) to assert lifecycle behavior;
+# protected-access is expected. The repo-level pylint config excludes tests/ via
+# [tool.pylint.MASTER] ignore — this keeps the diff-based pre-commit lint consistent when a
+# test file is passed explicitly.
+# pylint: disable=protected-access
+
 from pathlib import Path
 from typing import (
     Any,
@@ -13,6 +19,7 @@ from unittest.mock import (
 )
 
 import pytest
+from pydantic import AnyUrl
 
 from mcp.types import (
     CallToolResult,
@@ -60,7 +67,7 @@ class TestSyncClientInitialization:
         try:
             assert client.config_path == sample_config_file
             assert client.config_dict is None
-            mock_client_class.from_config.assert_called_once_with(sample_config_file)
+            mock_client_class.from_config.assert_called_once_with(sample_config_file, strict_connect=None)
         finally:
             client.shutdown()
 
@@ -76,7 +83,7 @@ class TestSyncClientInitialization:
         try:
             assert client.config_dict == sample_config_dict
             assert client.config_path is None
-            mock_client_class.from_dict.assert_called_once_with(sample_config_dict)
+            mock_client_class.from_dict.assert_called_once_with(sample_config_dict, strict_connect=None)
         finally:
             client.shutdown()
 
@@ -133,7 +140,9 @@ class TestSyncFromDictClassMethod:
             client.shutdown()
 
     @patch("mcp_multi_server.sync_client.MultiServerClient")
-    def test_from_dict_with_empty_config(self, mock_client_class: MagicMock, empty_config_dict: Dict[str, Any]) -> None:
+    def test_from_dict_with_empty_config(
+        self, mock_client_class: MagicMock, empty_config_dict: Dict[str, Any]
+    ) -> None:
         """Test from_dict with empty configuration."""
         mock_client = MagicMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -408,7 +417,11 @@ class TestSyncResourceReading:
         mock_client.__aexit__ = AsyncMock()
         mock_client.read_resource = AsyncMock(
             return_value=ReadResourceResult(
-                contents=[TextResourceContents(uri="inventory://overview", mimeType="text/plain", text="Overview data")]
+                contents=[
+                    TextResourceContents(
+                        uri=AnyUrl("inventory://overview"), mimeType="text/plain", text="Overview data"
+                    )
+                ]
             )
         )
         mock_client_class.from_dict.return_value = mock_client
@@ -446,7 +459,9 @@ class TestSyncResourceReading:
         mock_client.__aexit__ = AsyncMock()
         mock_client.read_resource = AsyncMock(
             return_value=ReadResourceResult(
-                contents=[TextResourceContents(uri="inventory://items", mimeType="application/json", text="[]")]
+                contents=[
+                    TextResourceContents(uri=AnyUrl("inventory://items"), mimeType="application/json", text="[]")
+                ]
             )
         )
         mock_client_class.from_dict.return_value = mock_client
@@ -469,9 +484,7 @@ class TestSyncPromptRetrieval:
     """Tests for getting prompts through sync client."""
 
     @patch("mcp_multi_server.sync_client.MultiServerClient")
-    def test_get_prompt_returns_result(
-        self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]
-    ) -> None:
+    def test_get_prompt_returns_result(self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]) -> None:
         """Test get_prompt returns result from underlying client."""
         mock_client = MagicMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -539,9 +552,7 @@ class TestSyncTimeoutHandling:
     """Tests for timeout handling in sync client."""
 
     @patch("mcp_multi_server.sync_client.MultiServerClient")
-    def test_call_tool_with_timeout(
-        self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]
-    ) -> None:
+    def test_call_tool_with_timeout(self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]) -> None:
         """Test call_tool respects timeout parameter."""
         mock_client = MagicMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -569,7 +580,7 @@ class TestSyncTimeoutHandling:
         mock_client.__aexit__ = AsyncMock()
         mock_client.read_resource = AsyncMock(
             return_value=ReadResourceResult(
-                contents=[TextResourceContents(uri="test://uri", mimeType="text/plain", text="Content")]
+                contents=[TextResourceContents(uri=AnyUrl("test://uri"), mimeType="text/plain", text="Content")]
             )
         )
         mock_client_class.from_dict.return_value = mock_client
@@ -579,9 +590,7 @@ class TestSyncTimeoutHandling:
             assert len(result.contents) == 1
 
     @patch("mcp_multi_server.sync_client.MultiServerClient")
-    def test_get_prompt_with_timeout(
-        self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]
-    ) -> None:
+    def test_get_prompt_with_timeout(self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]) -> None:
         """Test get_prompt respects timeout parameter."""
         mock_client = MagicMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -607,9 +616,7 @@ class TestSyncLifecycle:
     """Tests for lifecycle management in sync client."""
 
     @patch("mcp_multi_server.sync_client.MultiServerClient")
-    def test_background_thread_starts(
-        self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]
-    ) -> None:
+    def test_background_thread_starts(self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]) -> None:
         """Test that background thread is started on initialization."""
         mock_client = MagicMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -625,9 +632,7 @@ class TestSyncLifecycle:
             client.shutdown()
 
     @patch("mcp_multi_server.sync_client.MultiServerClient")
-    def test_shutdown_stops_thread(
-        self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]
-    ) -> None:
+    def test_shutdown_stops_thread(self, mock_client_class: MagicMock, sample_config_dict: Dict[str, Any]) -> None:
         """Test that shutdown stops the background thread."""
         mock_client = MagicMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)

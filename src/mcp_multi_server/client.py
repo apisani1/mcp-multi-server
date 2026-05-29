@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from contextlib import AsyncExitStack
 from datetime import timedelta
 from pathlib import Path
@@ -15,6 +16,7 @@ from typing import (
 
 from pydantic import AnyUrl
 
+import anyio
 from mcp import (
     ClientSession,
     StdioServerParameters,
@@ -93,12 +95,23 @@ class MultiServerClient:
         ...     tools = client.list_tools()
     """
 
-    def __init__(self, config_path: Union[str, Path] = "mcp_servers.json") -> None:
+    def __init__(
+        self,
+        config_path: Union[str, Path] = "mcp_servers.json",
+        *,
+        strict_connect: Optional[bool] = None,
+    ) -> None:
         """Initialize the multi-server client.
 
         Args:
             config_path: Path to the JSON configuration file containing server definitions.
                         Defaults to "mcp_servers.json" in the current directory.
+            strict_connect: Connection-failure policy. When False (default), a server that
+                        fails to connect or whose transport dies during capability discovery
+                        is dropped from the fleet and the remaining servers still connect.
+                        When True, such a failure is raised instead of skipped. If left as
+                        None, the value is read from the MCP_MULTI_SERVER_STRICT_CONNECT
+                        environment variable (truthy values: 1/true/yes/on), else False.
 
         Note:
             This constructor only sets up the configuration path. The actual connection
@@ -110,17 +123,29 @@ class MultiServerClient:
         self.capabilities: Dict[str, ServerCapabilities] = {}
         self.tool_to_server: Dict[str, str] = {}
         self.prompt_to_server: Dict[str, str] = {}
+        self.strict_connect: bool = self._resolve_strict_connect(strict_connect)
         self._stack: Optional[AsyncExitStack] = None
         self._config: Optional[MCPServersConfig] = None
 
+    @staticmethod
+    def _resolve_strict_connect(explicit: Optional[bool]) -> bool:
+        """Resolve the strict-connect policy: explicit arg wins, else env var, else False."""
+        if explicit is not None:
+            return explicit
+        return os.environ.get("MCP_MULTI_SERVER_STRICT_CONNECT", "").strip().lower() in {"1", "true", "yes", "on"}
+
     @classmethod
-    def from_config(cls, config_path: Union[str, Path]) -> "MultiServerClient":
+    def from_config(
+        cls, config_path: Union[str, Path], *, strict_connect: Optional[bool] = None
+    ) -> "MultiServerClient":
         """Create a client from a configuration file path.
 
         This is a convenience class method that's equivalent to the regular constructor.
 
         Args:
             config_path: Path to the JSON configuration file.
+            strict_connect: Connection-failure policy (see __init__). Defaults to None
+                        (read from MCP_MULTI_SERVER_STRICT_CONNECT, else False).
 
         Returns:
             A new MultiServerClient instance.
@@ -128,10 +153,10 @@ class MultiServerClient:
         Examples:
             >>> client = MultiServerClient.from_config("my_servers.json")
         """
-        return cls(config_path)
+        return cls(config_path, strict_connect=strict_connect)
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "MultiServerClient":
+    def from_dict(cls, config_dict: Dict[str, Any], *, strict_connect: Optional[bool] = None) -> "MultiServerClient":
         """Create a client from a configuration dictionary.
 
         This method allows programmatic configuration without needing a JSON file.
@@ -139,6 +164,8 @@ class MultiServerClient:
         Args:
             config_dict: Dictionary containing server configurations in the same
                         format as the JSON file (with "mcpServers" key).
+            strict_connect: Connection-failure policy (see __init__). Defaults to None
+                        (read from MCP_MULTI_SERVER_STRICT_CONNECT, else False).
 
         Returns:
             A new MultiServerClient instance with the provided configuration.
@@ -163,6 +190,7 @@ class MultiServerClient:
         instance.capabilities = {}
         instance.tool_to_server = {}
         instance.prompt_to_server = {}
+        instance.strict_connect = cls._resolve_strict_connect(strict_connect)
         instance._stack = None
         instance._config = MCPServersConfig.model_validate(config_dict)
         return instance
@@ -226,6 +254,8 @@ class MultiServerClient:
             try:
                 await self._connect_server(stack, server_name, server_config)
             except Exception as e:
+                if self.strict_connect:
+                    raise
                 logger.warning("Failed to connect to %s: %s", server_name, e)
                 continue
 
@@ -272,10 +302,20 @@ class MultiServerClient:
             McpError: If MCP protocol initialization fails.
             TimeoutError: If connection or initialization times out.
             pydantic.ValidationError: If server parameters are invalid.
+            anyio.ClosedResourceError, anyio.BrokenResourceError: If the transport dies
+                during capability discovery. The server is never registered (discovery
+                writes to local state and is only committed on success), and the exception
+                propagates so connect_all() can apply strict_connect.
 
         Note:
-            Failures during capability discovery are caught and logged as warnings.
-            The server will still be registered with partial capabilities if connection and initialization succeed.
+            Registration is deferred: the session, capabilities, and tool/prompt routing
+            entries are committed to the client only after discovery completes cleanly, so a
+            failure never leaves partial ("zombie") state behind. A server legitimately
+            lacking a capability (the SDK raises McpError, e.g. method-not-found) is warned
+            and skipped, and the server is still registered with whatever capabilities it
+            does provide. A transport-level failure or other unexpected error during
+            discovery means the connection is unusable: nothing is committed and the error
+            is re-raised.
         """
         logger.info("[%s] connecting...", server_name)
 
@@ -288,70 +328,94 @@ class MultiServerClient:
 
         # Initialize session
         await session.initialize()
-        self.sessions[server_name] = session
 
-        # Discover capabilities
+        # Discover capabilities into LOCAL state first, then commit atomically at the end.
+        #
+        # Deferring registration means a failure mid-discovery never leaves partial ("zombie")
+        # state in the client. Per-capability McpError (e.g. method-not-found) means the server
+        # simply does not implement that capability: warn and continue. A transport-level
+        # failure (ClosedResourceError / BrokenResourceError) or any other unexpected error
+        # means the connection is unusable — re-raise (nothing has been committed) so
+        # connect_all() can apply the strict_connect policy.
         capabilities = ServerCapabilities(name=server_name)
+        local_tool_to_server: Dict[str, str] = {}
+        local_prompt_to_server: Dict[str, str] = {}
 
-        # Get tools
         try:
-            tools_result = await session.list_tools()
-            capabilities.tools = tools_result
-            logger.info("[%s] Found %d tool(s)", server_name, len(tools_result.tools))
+            # Get tools
+            try:
+                tools_result = await session.list_tools()
+                capabilities.tools = tools_result
+                logger.info("[%s] Found %d tool(s)", server_name, len(tools_result.tools))
 
-            # Map tools to server
-            for tool in tools_result.tools:
-                if tool.name in self.tool_to_server:
-                    existing_server = self.tool_to_server[tool.name]
-                    logger.warning(
-                        "Tool '%s' collision detected! Already provided by '%s', now overridden by '%s'",
-                        tool.name,
-                        existing_server,
-                        server_name,
-                    )
-                self.tool_to_server[tool.name] = server_name
+                # Map tools to server (collision check against already-committed and local)
+                for tool in tools_result.tools:
+                    existing_server = self.tool_to_server.get(tool.name) or local_tool_to_server.get(tool.name)
+                    if existing_server is not None:
+                        logger.warning(
+                            "Tool '%s' collision detected! Already provided by '%s', now overridden by '%s'",
+                            tool.name,
+                            existing_server,
+                            server_name,
+                        )
+                    local_tool_to_server[tool.name] = server_name
 
+            except McpError as e:
+                logger.warning("Tools not available from [%s] : %s", server_name, e)
+
+            # Get resources
+            try:
+                resources_result = await session.list_resources()
+                capabilities.resources = resources_result
+                logger.info("[%s] Found %d resource(s)", server_name, len(resources_result.resources))
+            except McpError as e:
+                logger.warning("Resources not available from [%s] : %s", server_name, e)
+
+            # Get resource templates
+            try:
+                templates_result = await session.list_resource_templates()
+                capabilities.resource_templates = templates_result
+                logger.info("[%s] Found %d resource template(s)", server_name, len(templates_result.resourceTemplates))
+            except McpError as e:
+                logger.warning("Resource templates not available from [%s] : %s", server_name, e)
+
+            # Get prompts
+            try:
+                prompts_result = await session.list_prompts()
+                capabilities.prompts = prompts_result
+                logger.info("[%s] Found %d prompt(s)", server_name, len(prompts_result.prompts))
+
+                # Map prompts to server (collision check against already-committed and local)
+                for prompt in prompts_result.prompts:
+                    existing_server = self.prompt_to_server.get(prompt.name) or local_prompt_to_server.get(prompt.name)
+                    if existing_server is not None:
+                        logger.warning(
+                            "Prompt '%s' collision detected! Already provided by '%s', now overridden by '%s'",
+                            prompt.name,
+                            existing_server,
+                            server_name,
+                        )
+                    local_prompt_to_server[prompt.name] = server_name
+
+            except McpError as e:
+                logger.warning("Prompts not available from [%s] : %s", server_name, e)
+
+        except (anyio.ClosedResourceError, anyio.BrokenResourceError) as e:
+            logger.error(
+                "[%s] transport closed during capability discovery; not registering server: %s", server_name, e
+            )
+            raise
         except Exception as e:
-            logger.warning("Error while listing tools from [%s] : %s", server_name, e)
+            logger.error(
+                "[%s] unexpected error during capability discovery; not registering server: %s", server_name, e
+            )
+            raise
 
-        # Get resources
-        try:
-            resources_result = await session.list_resources()
-            capabilities.resources = resources_result
-            logger.info("[%s] Found %d resource(s)", server_name, len(resources_result.resources))
-        except Exception as e:
-            logger.warning("Error while listing resources from [%s] : %s", server_name, e)
-
-        # Get resource templates
-        try:
-            templates_result = await session.list_resource_templates()
-            capabilities.resource_templates = templates_result
-            logger.info("[%s] Found %d resource template(s)", server_name, len(templates_result.resourceTemplates))
-        except Exception as e:
-            logger.warning("Error while listing resource templates from [%s] : %s", server_name, e)
-
-        # Get prompts
-        try:
-            prompts_result = await session.list_prompts()
-            capabilities.prompts = prompts_result
-            logger.info("[%s] Found %d prompt(s)", server_name, len(prompts_result.prompts))
-
-            # Map prompts to server
-            for prompt in prompts_result.prompts:
-                if prompt.name in self.prompt_to_server:
-                    existing_server = self.prompt_to_server[prompt.name]
-                    logger.warning(
-                        "Prompt '%s' collision detected! Already provided by '%s', now overridden by '%s'",
-                        prompt.name,
-                        existing_server,
-                        server_name,
-                    )
-                self.prompt_to_server[prompt.name] = server_name
-
-        except Exception as e:
-            logger.warning("Error while listing prompts from [%s] : %s", server_name, e)
-
+        # Commit atomically: only reached when discovery completed without a transport/unexpected error.
+        self.sessions[server_name] = session
         self.capabilities[server_name] = capabilities
+        self.tool_to_server.update(local_tool_to_server)
+        self.prompt_to_server.update(local_prompt_to_server)
 
     async def set_logging_level(self, level: LoggingLevel) -> EmptyResult:
         """Set the logging level for the multi-server client and the MCP connected servers.

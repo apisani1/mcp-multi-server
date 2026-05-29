@@ -72,6 +72,8 @@ class SyncMultiServerClient:
         self,
         config_path: Optional[Union[str, Path]] = None,
         config_dict: Optional[Dict[str, Any]] = None,
+        *,
+        strict_connect: Optional[bool] = None,
     ):
         """Initialize SyncMultiServerClient.
 
@@ -81,6 +83,11 @@ class SyncMultiServerClient:
         Args:
             config_path: Path to MCP configuration file.
             config_dict: Configuration dictionary (alternative to config_path).
+            strict_connect: Connection-failure policy passed through to the underlying
+                MultiServerClient. When False (default), a server that fails to connect or
+                whose transport dies during discovery is dropped and the rest still connect;
+                when True, such a failure is raised. If None, read from the
+                MCP_MULTI_SERVER_STRICT_CONNECT environment variable, else False.
 
         Raises:
             ValueError: If neither or both config_path and config_dict are provided.
@@ -91,6 +98,7 @@ class SyncMultiServerClient:
 
         self.config_path = config_path
         self.config_dict = config_dict
+        self.strict_connect = strict_connect
         self.mcp_client: Optional[MultiServerClient] = None
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.thread: Optional[threading.Thread] = None
@@ -123,7 +131,9 @@ class SyncMultiServerClient:
         atexit.register(self.shutdown)
 
     @classmethod
-    def from_config(cls, config_path: Union[str, Path]) -> "SyncMultiServerClient":
+    def from_config(
+        cls, config_path: Union[str, Path], *, strict_connect: Optional[bool] = None
+    ) -> "SyncMultiServerClient":
         """Create a client from a configuration file path.
 
         This is a convenience class method that's equivalent to calling the constructor
@@ -131,6 +141,7 @@ class SyncMultiServerClient:
 
         Args:
             config_path: Path to the JSON configuration file.
+            strict_connect: Connection-failure policy (see __init__).
 
         Returns:
             A new SyncMultiServerClient instance.
@@ -138,10 +149,12 @@ class SyncMultiServerClient:
         Examples:
             >>> client = SyncMultiServerClient.from_config("mcp_config.json")
         """
-        return cls(config_path=config_path)
+        return cls(config_path=config_path, strict_connect=strict_connect)
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "SyncMultiServerClient":
+    def from_dict(
+        cls, config_dict: Dict[str, Any], *, strict_connect: Optional[bool] = None
+    ) -> "SyncMultiServerClient":
         """Create a client from a configuration dictionary.
 
         This method allows programmatic configuration without needing a JSON file.
@@ -149,6 +162,7 @@ class SyncMultiServerClient:
         Args:
             config_dict: Dictionary containing server configurations in the same
                 format as the JSON file (with "mcpServers" key).
+            strict_connect: Connection-failure policy (see __init__).
 
         Returns:
             A new SyncMultiServerClient instance with the provided configuration.
@@ -164,7 +178,7 @@ class SyncMultiServerClient:
             ... }
             >>> client = SyncMultiServerClient.from_dict(config)
         """
-        return cls(config_dict=config_dict)
+        return cls(config_dict=config_dict, strict_connect=strict_connect)
 
     def _start_background_loop(self) -> None:
         """Start background thread with event loop."""
@@ -196,9 +210,11 @@ class SyncMultiServerClient:
         try:
             # Enter the MCP client context (creates cancel scope in THIS task)
             if self.config_path is not None:
-                self.mcp_client = MultiServerClient.from_config(self.config_path)
+                self.mcp_client = MultiServerClient.from_config(self.config_path, strict_connect=self.strict_connect)
             else:
-                self.mcp_client = MultiServerClient.from_dict(self.config_dict)  # type: ignore
+                self.mcp_client = MultiServerClient.from_dict(
+                    self.config_dict, strict_connect=self.strict_connect  # type: ignore
+                )
             await self.mcp_client.__aenter__()
 
             # Signal that initialization is complete
