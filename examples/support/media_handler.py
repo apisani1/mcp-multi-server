@@ -221,7 +221,9 @@ def display_content_from_uri(resource_link: ResourceLink) -> None:
     try:
         # Load content from URI
         content_bytes = load_content_from_uri(resource_link)
-        mime_type = resource_link.mimeType or "application/octet-stream"
+        # Strip RFC 2045 parameters (e.g., "text/html; charset=utf-8" -> "text/html") so
+        # equality and membership checks below don't reject parameterized media types.
+        mime_type = (resource_link.mimeType or "application/octet-stream").split(";", 1)[0].strip().lower()
 
         # Handle different content types based on MIME type
         if mime_type.startswith("image/"):

@@ -34,12 +34,15 @@ except ImportError:
 mcp = FastMCP("Inventory Resource Server")
 
 
-@mcp._mcp_server.set_logging_level()
+@mcp._mcp_server.set_logging_level()  # pylint: disable=protected-access
 async def set_logging_level(level: str) -> None:
     configure_logging(name="mcp", level=level)
 
 
-@mcp.resource("inventory://overview")
+@mcp.resource(
+    "inventory://overview",
+    meta={"category": "summary", "stability": "stable"},
+)
 def get_inventory_overview() -> InventoryOverview:
     """Returns comprehensive inventory overview."""
     total_items = len(db.list_enriched_items())
@@ -56,7 +59,10 @@ def get_inventory_overview() -> InventoryOverview:
     )
 
 
-@mcp.resource("inventory://database-schema")
+@mcp.resource(
+    "inventory://database-schema",
+    meta={"category": "introspection", "stability": "stable"},
+)
 def get_database_schema() -> DatabaseSchema:
     """Returns the complete database schema definition."""
 
@@ -351,7 +357,10 @@ def search_inventory(query: str) -> Union[List[EnrichedInventoryItem], str]:
     return items
 
 
-@mcp.resource("inventory://low-stock")
+@mcp.resource(
+    "inventory://low-stock",
+    meta={"category": "operational", "refresh": "on-demand"},
+)
 def get_low_stock_items() -> Union[List[EnrichedInventoryItem], str]:
     """Returns items that need to be reordered."""
     items = db.get_low_stock_items()
