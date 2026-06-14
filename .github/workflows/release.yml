@@ -33,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "^3.10"
+          python-version: '3.10'
 
       - name: Cache Poetry dependencies
         uses: actions/cache@v4
@@ -82,19 +82,34 @@ jobs:
             echo "📝 Draft release - will NOT be marked as latest"
           fi
 
-      - name: Extract release notes from tag
+      - name: Prepare release notes
         id: release-notes
         run: |
           VERSION=${{ steps.release-info.outputs.version }}
           TAG_NAME=${{ steps.release-info.outputs.tag_name }}
+          TAG_COMMIT=$(git rev-list -n 1 "$TAG_NAME")
 
-          echo "Extracting message from tag $TAG_NAME..."
-          git tag -l --format='%(contents)' "$TAG_NAME" > RELEASE_NOTES.md
+          if [ -s RELEASE_NOTES.md ] && git diff-tree --root --no-commit-id --name-only -r "$TAG_COMMIT" | grep -qx 'RELEASE_NOTES.md'; then
+            echo "Using RELEASE_NOTES.md changed in tagged commit $TAG_COMMIT"
+          elif [ -s CHANGELOG.md ]; then
+            echo "RELEASE_NOTES.md not changed in tagged commit; extracting CHANGELOG.md entry for $VERSION..."
+            awk -v version="$VERSION" '
+              BEGIN {
+                escaped = version
+                gsub(/\./, "\\.", escaped)
+              }
+              /^## / {
+                if (seen) exit
+                if ($0 ~ "^## \\[?" escaped "\\]?([[:space:]]|-|$)") seen = 1
+              }
+              seen { print }
+            ' CHANGELOG.md > RELEASE_NOTES.md
+          fi
 
           if [ ! -s RELEASE_NOTES.md ]; then
-            echo "Warning: Could not extract tag message for $TAG_NAME"
+            echo "Warning: Could not prepare release notes for $TAG_NAME"
             echo "Creating simple release notes..."
-            echo "# Release $TAG_NAME" > RELEASE_NOTES.md
+            echo "## Release $TAG_NAME" > RELEASE_NOTES.md
             echo "" >> RELEASE_NOTES.md
             echo "See CHANGELOG.md for details." >> RELEASE_NOTES.md
           fi

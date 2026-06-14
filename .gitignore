@@ -35,6 +35,10 @@ coverage.xml
 !.vscode/extensions.json
 *.code-workspace
 
+# Project notes (local only)
+notes/
+.tmp_release_docs/
+
 # Environment
 .venv
 env/
@@ -45,9 +49,6 @@ ENV/
 .DS_Store
 *.pkl
 *.pickle
-
-# Obsidian project notes (local only)
-notes/
 
 # sdk-migration-manager skill — test workspace and run artifacts (local only)
 .claude/skills/sdk-migration-manager-workspace/
