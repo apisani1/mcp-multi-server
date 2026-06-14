@@ -1,4 +1,9 @@
-.PHONY: all format lint lint-mypy lint-flake8 lint-pylint test tests test-manual help clean build publish publish-test publish-strict publish-test-strict docs docs-live docs-check release-major release-minor release-micro release-rc release-beta release-alpha release-major-a release-major-b release-major-rc release-minor-a release-minor-b release-minor-rc release-micro-a release-micro-b release-micro-rc rollback venv-clean run mcp-config mcp-dev
+.PHONY: all format lint lint-mypy lint-flake8 lint-pylint test tests test-manual help clean build publish publish-test publish-strict publish-test-strict docs docs-live docs-check release-major release-minor release-micro release-rc release-beta release-alpha release-major-a release-major-b release-major-rc release-minor-a release-minor-b release-minor-rc release-micro-a release-micro-b release-micro-rc rollback venv venv-clean run mcp-config mcp-dev
+
+######################
+# This automation tasks were inspired by automation patterns from
+# phitoduck/python-course-cookiecutter-v2, but are an independent implementation.
+######################
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -304,7 +309,7 @@ help-release:
 	@echo '  make rollback           - Rollback last release'
 
 ######################
-# EXECUTION
+# EXECUTION (project-specific)
 ######################
 
 # Run example client

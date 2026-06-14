@@ -1,5 +1,10 @@
 #!/bin/bash
 
+######################
+# This script was inspired by automation patterns from
+# phitoduck/python-course-cookiecutter-v2, but is an independent implementation.
+######################
+
 set -e
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -64,17 +69,18 @@ function venv {
     # Manually deactivate conda environment if active
     if [ -n "$CONDA_DEFAULT_ENV" ]; then
         echo "Deactivating conda environment: $CONDA_DEFAULT_ENV"
-        # Clean all conda-related variables
-        unset CONDA_DEFAULT_ENV CONDA_PREFIX CONDA_PYTHON_EXE CONDA_PROMPT_MODIFIER
-        # Restore original PATH (remove conda paths)
-        if [ -n "$_CONDA_OLD_PATH" ]; then
-            export PATH="$_CONDA_OLD_PATH"
+        # Remove conda environment bin directory from PATH (must happen before unsetting CONDA_PREFIX)
+        if [ -n "$CONDA_PREFIX" ]; then
+            PATH=$(echo "$PATH" | sed "s|${CONDA_PREFIX}/bin:||g; s|:${CONDA_PREFIX}/bin||g; s|^${CONDA_PREFIX}/bin$||g")
+            export PATH
         fi
+        # Clean all conda-related variables
+        unset CONDA_DEFAULT_ENV CONDA_PREFIX CONDA_PYTHON_EXE CONDA_PROMPT_MODIFIER CONDA_SHLVL
     fi
 
     # Manually deactivate regular virtual environment if active
     if [ -n "$VIRTUAL_ENV" ]; then
-        echo "Deactivating virtual environment: $(basename $VIRTUAL_ENV)"
+        echo "Deactivating virtual environment: $(basename "$VIRTUAL_ENV")"
         # Clean all venv-related variables
         unset VIRTUAL_ENV PYTHONHOME
         # Restore original PATH (remove venv paths)
@@ -140,11 +146,12 @@ function requirements {
 
 # Helper function to get Python files
 function get:python:files {
-    echo "./src/mcp_multi_server"
+    echo "./src/mcp_multi_server/"
 }
 
+# Project-specific: compare against main branch (feature-branch workflow)
 function get:python:files:diff {
-    git diff --name-only --diff-filter=d main | grep -E '\.py$|\.ipynb$' || echo ""
+    git diff --name-only --diff-filter=d main -- src/ tests/ | grep -E '\.py$|\.ipynb$' || echo ""
 }
 
 function get:python:files:tests {
@@ -197,10 +204,41 @@ function lint {
 # Run all linters on changed files
 function lint:diff {
     PYTHON_FILES=$(get:python:files:diff)
+    if [ -z "$PYTHON_FILES" ]; then
+        echo "No changed Python files to lint."
+        return 0
+    fi
+
+    # Linters ignore project-wide excludes (e.g. [tool.mypy] exclude in
+    # pyproject.toml) when files are passed positionally. Read the mypy
+    # exclude regex from pyproject.toml so `make pre-commit` matches the
+    # `make check` semantics (which only lints ./src/mcp_multi_server/).
+    EXCLUDE_REGEX=$(poetry run python -c '
+import sys
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+with open("pyproject.toml", "rb") as f:
+    cfg = tomllib.load(f)
+print(cfg.get("tool", {}).get("mypy", {}).get("exclude", ""))
+')
+
+    if [ -n "$EXCLUDE_REGEX" ]; then
+        LINT_FILES=$(echo "$PYTHON_FILES" | grep -Ev "$EXCLUDE_REGEX" || true)
+    else
+        LINT_FILES="$PYTHON_FILES"
+    fi
+
+    if [ -z "$LINT_FILES" ]; then
+        echo "No changed Python files to lint (all changed files are excluded)."
+        return 0
+    fi
+
     echo "Running linters on changed files..."
-    lint:mypy "$PYTHON_FILES" ".mypy_cache_diff"
-    lint:flake8 "$PYTHON_FILES"
-    lint:pylint "$PYTHON_FILES"
+    lint:mypy "$LINT_FILES" ".mypy_cache_diff"
+    lint:flake8 "$LINT_FILES"
+    lint:pylint "$LINT_FILES"
 }
 
 # Run all linters on test files
@@ -274,6 +312,10 @@ function format:check {
 # Run formatters on changed files
 function format:diff {
     PYTHON_FILES=$(get:python:files:diff)
+    if [ -z "$PYTHON_FILES" ]; then
+        echo "No changed Python files to format."
+        return 0
+    fi
     echo "Running formatters on changed files..."
     format:black "$PYTHON_FILES"
     format:isort "$PYTHON_FILES"
@@ -335,7 +377,7 @@ function tests:cov {
     echo "Running tests with coverage..."
     TEST_FILE="${1:-$(get:python:files:tests)}"
     shift || true
-    poetry run pytest "$TEST_FILE" --cov=mcp_multi_server  --cov-report=term "$@"
+    poetry run pytest "$TEST_FILE" --cov=mcp_multi_server --cov-report=term "$@"
 }
 
 # Run tests in verbose mode
@@ -440,8 +482,7 @@ function docs:check {
 # Clean and rebuild documentation
 function docs:clean {
     echo "Cleaning documentation build files..."
-    cd docs && poetry run make clean
-    cd docs && poetry run make html
+    cd docs && poetry run make clean && poetry run make html
 }
 
 ######################
@@ -468,13 +509,6 @@ function try-load-dotenv {
     while read -r line; do
         export "$line"
     done < <(grep -v '^#' "$THIS_DIR/.env" | grep -v '^$')
-}
-
-# Build package
-function build {
-    echo "Building package..."
-    clean
-    poetry build
 }
 
 ################################################################################
@@ -517,6 +551,13 @@ config_get() {
 
     # 3. Not found
     return 1
+}
+
+# Build package
+function build {
+    echo "Building package..."
+    clean
+    poetry build
 }
 
 # Publish to TestPyPI, non strictly requiring token
@@ -598,106 +639,80 @@ function validate:build {
 # RELEASE
 ######################
 
-# Helper function to get multi-line changes input
-function get:changes {
-    echo "Enter changes (empty line to finish):" >&2
-    local changes=""
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && break
-        changes="${changes}- ${line}"$'\n'
-    done
-    echo "$changes"
-}
-
 # Release versions
 function release:major {
     echo "Creating major release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create major --changes "$changes"
+    python3 scripts/release.py create major --release-docs
 }
 
 function release:minor {
     echo "Creating minor release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create minor --changes "$changes"
+    python3 scripts/release.py create minor --release-docs
 }
 
 function release:micro {
     echo "Creating micro release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create micro --changes "$changes"
+    python3 scripts/release.py create micro --release-docs
 }
 
 function release:rc {
     echo "Creating release candidate..."
-    changes=$(get:changes)
-    python3 scripts/release.py create micro --pre rc --changes "$changes"
+    python3 scripts/release.py create micro --pre rc --release-docs
 }
 
 function release:beta {
     echo "Creating beta release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create micro --pre b --changes "$changes"
+    python3 scripts/release.py create micro --pre b --release-docs
 }
 
 function release:alpha {
     echo "Creating alpha release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create micro --pre a --changes "$changes"
+    python3 scripts/release.py create micro --pre a --release-docs
 }
 
 function release:major:a {
     echo "Creating major alpha release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create major --pre a --changes "$changes"
+    python3 scripts/release.py create major --pre a --release-docs
 }
 
 function release:major:b {
     echo "Creating major beta release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create major --pre b --changes "$changes"
+    python3 scripts/release.py create major --pre b --release-docs
 }
 
 function release:major:rc {
     echo "Creating major release candidate..."
-    changes=$(get:changes)
-    python3 scripts/release.py create major --pre rc --changes "$changes"
+    python3 scripts/release.py create major --pre rc --release-docs
 }
 
 function release:minor:a {
     echo "Creating minor alpha release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create minor --pre a --changes "$changes"
+    python3 scripts/release.py create minor --pre a --release-docs
 }
 
 function release:minor:b {
     echo "Creating minor beta release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create minor --pre b --changes "$changes"
+    python3 scripts/release.py create minor --pre b --release-docs
 }
 
 function release:minor:rc {
     echo "Creating minor release candidate..."
-    changes=$(get:changes)
-    python3 scripts/release.py create minor --pre rc --changes "$changes"
+    python3 scripts/release.py create minor --pre rc --release-docs
 }
 
 function release:micro:a {
     echo "Creating micro alpha release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create micro --pre a --changes "$changes"
+    python3 scripts/release.py create micro --pre a --release-docs
 }
 
 function release:micro:b {
     echo "Creating micro beta release..."
-    changes=$(get:changes)
-    python3 scripts/release.py create micro --pre b --changes "$changes"
+    python3 scripts/release.py create micro --pre b --release-docs
 }
 
 function release:micro:rc {
     echo "Creating micro release candidate..."
-    changes=$(get:changes)
-    python3 scripts/release.py create micro --pre rc --changes "$changes"
+    python3 scripts/release.py create micro --pre rc --release-docs
 }
 
 # Rollback release
@@ -746,6 +761,7 @@ function help {
     echo "  install:all          - Install all dependencies"
     echo "  update               - Update dependencies"
     echo "  venv                 - Create and activate virtual environment"
+    echo "  venv:clean           - Delete and recreate virtual environment"
     echo "  lock                 - Lock dependencies"
     echo "  kernel               - Create Jupyter kernel"
     echo "  remove:kernel        - Remove Jupyter kernel"
@@ -765,6 +781,7 @@ function help {
     echo ""
     echo "Testing:"
     echo "  tests [file] [args]   - Run tests"
+    echo "  tests:ci              - Run tests excluding integration tests (CI)"
     echo "  tests:cov             - Run tests with coverage"
     echo "  tests:verbose         - Run tests in verbose mode"
     echo "  tests:pattern <pat>   - Run tests matching pattern"
@@ -793,6 +810,15 @@ function help {
     echo "  release:rc           - Create release candidate"
     echo "  release:beta         - Create beta release"
     echo "  release:alpha        - Create alpha release"
+    echo "  release:major:a      - Create major alpha release"
+    echo "  release:major:b      - Create major beta release"
+    echo "  release:major:rc     - Create major release candidate"
+    echo "  release:minor:a      - Create minor alpha release"
+    echo "  release:minor:b      - Create minor beta release"
+    echo "  release:minor:rc     - Create minor release candidate"
+    echo "  release:micro:a      - Create micro alpha release"
+    echo "  release:micro:b      - Create micro beta release"
+    echo "  release:micro:rc     - Create micro release candidate"
     echo "  rollback             - Rollback last release"
     echo "  help:release         - Show detailed release help"
     echo ""
