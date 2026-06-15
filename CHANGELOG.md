@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.2.0] - 2026-06-15
+
+### Added
+- `strict_connect` connection-failure policy on `MultiServerClient` and
+  `SyncMultiServerClient` (constructor, `from_config`, `from_dict`). When `False`
+  (default), a server that fails to connect or whose transport dies during capability
+  discovery is dropped and the remaining servers still connect; when `True`, the
+  failure is raised.
+- `MCP_MULTI_SERVER_STRICT_CONNECT` environment variable, used as the default policy
+  when `strict_connect` is left as `None` (truthy values: `1`/`true`/`yes`/`on`).
+
+### Changed
+- Server registration is now deferred and atomic. Capabilities are discovered into
+  local state and committed to the client only after discovery completes cleanly, so a
+  mid-discovery failure never leaves partial ("zombie") server state behind.
+- Capability discovery now distinguishes a server that legitimately lacks a capability
+  (`McpError`, e.g. method-not-found — warned and skipped, server still registered with
+  whatever it provides) from a transport-level or otherwise unexpected failure, which is
+  re-raised so `connect_all()` can apply the `strict_connect` policy.
+- Upgraded the `mcp` dependency from `1.13.1` to `1.27.1`; the minimum supported version
+  is now `>=1.27.1`.
+
+### Fixed
+- examples: the media handler now strips RFC 2045 parameters from MIME types
+  (e.g. `text/html; charset=utf-8` → `text/html`) so equality and membership checks no
+  longer reject parameterized media types.
+
+### Documentation
+- examples: the resource server now demonstrates resource `meta` metadata.
+- Linked project notes from `CLAUDE.md`.
+
+### Internal
+- Added `.claude` tooling: the `sdk-migration-manager` skill and MCP migration subagents.
+- Synced dev-environment infrastructure with generate-project v2.1.0 (`run.sh`,
+  `Makefile`, `scripts/release.py`, CI workflows, `install_claude_skills.py`) and reduced
+  vulnerabilities in `docs/requirements.txt`.
+
 ## [1.1.0.post1] - 2026-03-11
 
  ### Changes
