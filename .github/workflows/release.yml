@@ -35,23 +35,16 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Cache Poetry dependencies
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
+
+      - name: Cache UV dependencies
         uses: actions/cache@v4
         with:
           path: .venv
-          key: ${{ runner.os }}-poetry-v2-${{ hashFiles('**/poetry.lock', '**/pyproject.toml') }}
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
           restore-keys: |
-            ${{ runner.os }}-poetry-v2-
-
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          poetry --version
-
-      - name: Configure Poetry
-        run: |
-          poetry config virtualenvs.create true
-          poetry config virtualenvs.in-project true
+            ${{ runner.os }}-uv-
 
       - name: Determine release type and latest status
         id: release-info

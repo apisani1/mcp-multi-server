@@ -127,7 +127,7 @@ test-verbose:
 
 # Run tests marked as manual
 test-manual:
-	@poetry run pytest -m manual
+	@uv run pytest -m manual
 
 # Run tests that match a specific pattern
 test-pattern:
@@ -315,20 +315,20 @@ help-release:
 # Run example client
 # Usage: make run-chat [ARGS="--model gpt-4-turbo --verbose"]
 run-chat:
-	@poetry run python3 -m examples.client.chat_client $(ARGS)
+	@uv run python3 -m examples.client.chat_client $(ARGS)
 
 run-sync-chat:
-	@poetry run python3 -m examples.client.sync_chat_client $(ARGS)
+	@uv run python3 -m examples.client.sync_chat_client $(ARGS)
 
 # Run example servers (for testing)
 run-tool-server:
-	@poetry run python3 -m examples.servers.tool_server
+	@uv run python3 -m examples.servers.tool_server
 
 run-resource-server:
-	@poetry run python3 -m examples.servers.resource_server
+	@uv run python3 -m examples.servers.resource_server
 
 run-prompt-server:
-	@poetry run python3 -m examples.servers.prompt_server
+	@uv run python3 -m examples.servers.prompt_server
 
 # Generic run command - runs any Python module
 # Usage: make run <module.path>
@@ -347,7 +347,7 @@ run:
 		echo "  make run-tool-client"; \
 		exit 1; \
 	fi
-	@poetry run python3 -m $(filter-out $@,$(MAKECMDGOALS))
+	@uv run python3 -m $(filter-out $@,$(MAKECMDGOALS))
 
 # Generate MCP server configuration
 mcp-config:

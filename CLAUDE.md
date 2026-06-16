@@ -45,7 +45,7 @@ MCP Multi-Server is a Python library for managing connections to multiple Model 
 
 ## Development Commands
 
-This project uses a combination of Poetry for dependency management and a custom `run.sh` script for development tasks. All commands can be executed via either the Makefile (which delegates to `run.sh`) or directly via `run.sh`.
+This project uses UV for dependency management and a custom `run.sh` script for development tasks. All commands can be executed via either the Makefile (which delegates to `run.sh`) or directly via `run.sh`.
 
 ### Environment Setup
 ```bash
@@ -89,20 +89,20 @@ make docs-clean           # Clean and rebuild documentation
 
 ### Package Building
 ```bash
-make build                # Build package with Poetry
+make build                # Build package with UV
 make validate-build       # Validate package builds correctly
 make clean                # Clean build artifacts
 ```
 
 ## Development Workflow
 
-The project uses Poetry for dependency management with multiple optional dependency groups:
+The project uses UV for dependency management with multiple dependency groups:
 - `test`: pytest and testing utilities
 - `lint`: black, isort, flake8, pylint, mypy
 - `docs`: Sphinx and documentation tools
 - `typing`: mypy type checking
 
-Use `poetry add <pkg>` to add dependencies and `poetry install` to install from lockfile. Avoid using `pip install` directly.
+Use `uv add <pkg>` to add dependencies and `uv sync` to install from lockfile. Avoid using `pip install` directly.
 
 ## Code Style
 

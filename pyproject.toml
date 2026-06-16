@@ -1,15 +1,14 @@
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "mcp-multi-server"
 version = "1.2.0"
 description = "A Python library for managing connections to multiple Model Context Protocol (MCP) servers"
 authors = [{ name = "Antonio Pisani", email = "antonio.pisani@gmail.com" }]
-readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["mcp (>=1.27.1,<2.0.0)", "pydantic (>=2.0.0,<3.0.0)"]
+readme = "README.md"
 keywords = [
     "mcp",
     "model-context-protocol",
@@ -29,6 +28,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+dependencies = [
+    "mcp (>=1.27.1,<2.0.0)",
+    "pydantic (>=2.0.0,<3.0.0)",
+]
 
 [project.optional-dependencies]
 openai = ["openai (>=1.102.0,<2.0.0)"]
@@ -40,14 +43,44 @@ examples = [
     "python-dotenv (>=1.1.0,<2.0.0)",
 ]
 
-[tool.poetry]
-packages = [{ include = "mcp_multi_server", from = "src" }]
-
-[tool.poetry.urls]
+[project.urls]
 "Source Code" = "https://github.com/apisani1/mcp-multi-server"
 "Release Notes" = "https://github.com/apisani1/mcp-multi-server/releases"
-"Documentation" = "https://mcp-multi-server.readthedocs.io/"
+Documentation = "https://mcp-multi-server.readthedocs.io/"
 "Issue Tracker" = "https://github.com/apisani1/mcp-multi-server/issues"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5,<7",
+    "python-dotenv>=1.1.0,<2",
+    "tomli>=2.0.0,<3",
+]
+test = [
+    "pytest>=7.4.0,<8",
+    "pytest-asyncio>=0.21.0,<0.22",
+    "pytest-cov>=6.1.0,<7",
+]
+lint = [
+    "flake8>=7.1.0,<8",
+    "flake8-pyproject>=1.2.0,<2",
+    "pylint>=3.3.0,<4",
+    "black>=25.1.0,<26",
+    "isort>=6.0.0,<7",
+]
+typing = ["mypy>=1.15,<2"]
+docs = [
+    "sphinx>=8.1.3,<9",
+    "sphinx-rtd-theme>=3.0.2,<4",
+    "myst-parser>=4.0.0,<5",
+    "sphinx-copybutton>=0.5.2,<0.6",
+    "sphinx-autobuild>=2021.3.14,<2022",
+    "sphinx-sitemap>=2.6.0,<3",
+    "sphinx-tabs>=3.4.7,<4",
+    "doc8>=0.8.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_multi_server"]
 
 [tool.semantic_release]
 version_variable = [
@@ -56,56 +89,6 @@ version_variable = [
     "docs/index.md:**Version**",
     "src/mcp_multi_server/__init__.py:__version__",
 ]
-
-[tool.poetry.dependencies]
-python = "^3.10"
-mcp = "^1.27.1"
-pydantic = "^2.0.0"
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-ipykernel = "^6.29.5"
-python-dotenv = "^1.1.0"
-tomli = "^2.0.0"
-
-[tool.poetry.group.test]
-optional = true
-
-[tool.poetry.group.test.dependencies]
-pytest = "^7.4.0"
-pytest-asyncio = "^0.21.0"
-pytest-cov = "^6.1.0"
-
-[tool.poetry.group.lint]
-optional = true
-
-[tool.poetry.group.lint.dependencies]
-flake8 = "^7.1.0"
-flake8-pyproject = "^1.2.0"
-pylint = "^3.3.0"
-black = "^25.1.0"
-isort = "^6.0.0"
-
-[tool.poetry.group.typing]
-optional = true
-
-[tool.poetry.group.typing.dependencies]
-mypy = "^1.15"
-
-[tool.poetry.group.docs]
-optional = true
-
-[tool.poetry.group.docs.dependencies]
-sphinx = "^8.1.3"
-sphinx-rtd-theme = "^3.0.2"
-myst-parser = "^4.0.0"
-sphinx-copybutton = "^0.5.2"
-sphinx-autobuild = "^2021.3.14"
-sphinx-sitemap = "^2.6.0"
-sphinx-tabs = "^3.4.7"
-doc8 = ">=0.8.0"
 
 [tool.black]
 line-length = 119
@@ -216,6 +199,7 @@ known_third_party = [
     "asyncpg",
     "pytest_asyncio",
 ]
+known_first_party = ["mcp_multi_server"]
 force_single_line = false
 multi_line_output = 3
 force_grid_wrap = 2
