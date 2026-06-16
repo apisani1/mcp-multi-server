@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.2.1] - 2026-06-16
+
+Infrastructure-only release. No library API or runtime behavior changes —
+consumers installing with `pip install mcp-multi-server` or `poetry add
+mcp-multi-server` get the same package as 1.2.0.
+
+### Changed
+- Dependency management and packaging migrated from Poetry to UV. The
+  lockfile is now `uv.lock`; dev dependencies live in
+  `[dependency-groups]` (`dev`/`test`/`lint`/`typing`/`docs`). `examples`
+  and `openai` remain as `[project.optional-dependencies]`.
+- Build backend swapped from `poetry-core` to `hatchling`. The wheel
+  layout (`src/mcp_multi_server`) and published distribution name are
+  unchanged.
+- `run.sh`, `Makefile`, GitHub Actions workflows (tests, docs, release),
+  `.readthedocs.yaml`, and `.vscode/settings.json` re-synced from the
+  `apisani1/generate-project` v2.2.0 UV template, preserving project-
+  specific bits (`tests:ci` integration-marker filter, main-branch diff
+  for `make pre-commit`, system-deps CI step, `--cov=mcp_multi_server`,
+  `run-*`/`mcp-*` Makefile targets, editor settings).
+- `install:all` and `install:dev` now pass `--all-extras` so the
+  `examples` extras (pillow, pyautogui, openai) are installed in dev
+  environments (matches the previous `poetry install --extras examples`
+  behavior).
+
+### Documentation
+- `docs/Makefile` Sphinx targets call `uv run` instead of `poetry run`.
+- `docs/index.md` installation snippet shows `uv add mcp-multi-server`
+  in place of `poetry add mcp-multi-server`.
+- `CLAUDE.md` Development Commands and Workflow sections updated to
+  describe the UV workflow.
+
 ## [1.2.0] - 2026-06-15
 
 ### Added

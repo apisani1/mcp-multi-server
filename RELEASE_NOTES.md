@@ -1,47 +1,54 @@
-# mcp-multi-server v1.2.0
+# mcp-multi-server v1.2.1
 
-This release makes fleet startup more robust. You can now choose how the client reacts
-when a server fails to connect, and registration is atomic so a failure mid-discovery
-never leaves a half-registered server behind. It also upgrades the MCP SDK to 1.27.1.
+Infrastructure-only release. **No library API or runtime behavior changes.**
+If you install `mcp-multi-server` with `pip` or `poetry`, this release is
+functionally identical to `1.2.0` — you don't need to do anything.
 
-## Added
+## What changed
 
-- **`strict_connect` connection-failure policy** on `MultiServerClient` and
-  `SyncMultiServerClient` (constructor, `from_config`, `from_dict`):
-  - `False` (default): a server that fails to connect — or whose transport dies during
-    capability discovery — is dropped, and the remaining servers still connect.
-  - `True`: such a failure is raised instead of skipped.
-- **`MCP_MULTI_SERVER_STRICT_CONNECT` environment variable** to set the default policy
-  when `strict_connect` is left as `None` (truthy values: `1`/`true`/`yes`/`on`).
+### Build & dev environment migrated to UV
 
-```python
-# Fail fast if any server can't be reached:
-client = MultiServerClient.from_config("mcp_servers.json", strict_connect=True)
+The project now uses [UV](https://docs.astral.sh/uv/) for dependency
+management and packaging, with [hatchling](https://hatch.pypa.io/) as the
+build backend (previously `poetry-core`). The wheel layout
+(`src/mcp_multi_server`) and the published distribution name are unchanged.
 
-# Or set the default for the whole process:
-#   export MCP_MULTI_SERVER_STRICT_CONNECT=1
+### For consumers
+
+Nothing to change. The library still installs the same way:
+
+```bash
+pip install mcp-multi-server
+# or
+uv add mcp-multi-server
+# or
+poetry add mcp-multi-server
 ```
 
-## Changed
+### For contributors
 
-- **Atomic server registration.** Capabilities are discovered into local state and
-  committed to the client only after discovery completes cleanly, so a failure partway
-  through never leaves partial ("zombie") server state behind.
-- **Clearer failure handling during discovery.** A server that legitimately lacks a
-  capability (`McpError`, e.g. method-not-found) is warned and skipped, and the server is
-  still registered with whatever it does provide. A transport-level or otherwise
-  unexpected failure is re-raised so the `strict_connect` policy can apply.
-- **MCP SDK upgraded to 1.27.1** (minimum is now `>=1.27.1`).
+If you work on the repo locally, the dev workflow has moved off Poetry:
 
-## Fixed
+- Replace `poetry install --with dev,test,lint,typing,docs --extras examples`
+  with `uv sync --all-groups --all-extras` (or `make install-dev` /
+  `make install-all`).
+- The lockfile is `uv.lock`; `poetry.lock` is gone.
+- `run.sh` and the `Makefile` now call `uv run` / `uv sync`. Existing
+  `make` targets (`make test`, `make pre-commit`, `make docs`, `make build`,
+  `make release-*`, etc.) continue to work unchanged.
 
-- examples: the media handler now strips RFC 2045 parameters from MIME types
-  (e.g. `text/html; charset=utf-8` → `text/html`) so parameterized media types are
-  handled correctly.
+### Infra refresh
 
-## Upgrading
+`run.sh`, `Makefile`, the GitHub Actions workflows (tests/docs/release),
+`.readthedocs.yaml`, and `.vscode/settings.json` were re-synced from the
+[`apisani1/generate-project`](https://github.com/apisani1/generate-project)
+v2.2.0 UV template, preserving project-specific customizations
+(`tests:ci` integration-marker filter, main-branch diff for
+`make pre-commit`, system-deps CI step, `--cov=mcp_multi_server`,
+`run-*`/`mcp-*` Makefile targets, editor settings).
 
-No breaking API changes — existing code keeps the previous behavior (lenient connect).
-Because the default `strict_connect` is `False`, servers that fail to connect are still
-skipped as before; opt into `strict_connect=True` (or the environment variable) if you
-want startup to fail fast. Ensure your environment provides `mcp >= 1.27.1`.
+### Documentation
+
+- `docs/Makefile` Sphinx targets and `docs/index.md` install example
+  switched from `poetry` to `uv`.
+- `CLAUDE.md` Development Commands and Workflow sections updated for UV.
