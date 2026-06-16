@@ -41,10 +41,10 @@ Automatically discover and aggregate all capabilities (tools, resources, resourc
 pip install mcp-multi-server
 ```
 
-Or with Poetry:
+Or with UV:
 
 ```bash
-poetry add mcp-multi-server
+uv add mcp-multi-server
 ```
 
 ### Basic Usage
