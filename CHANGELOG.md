@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.2.2] - 2026-06-19
+
+Infrastructure-only release. No library API or runtime behavior changes.
+
+### Fixed
+- `release.yml`: corrected pip install package name from `mcp_multi_server` to
+  `mcp-multi-server` in the TestPyPI smoke-test step.
+- `run.sh`: fixed `tests:cov` coverage path to `src/mcp_multi_server` (previously
+  missing the `src/` prefix, which caused coverage to be measured against the wrong path).
+- `scripts/release.py`: fixed `read_release_doc` return pattern — each early-exit branch
+  now explicitly returns `None` rather than forwarding the return value of
+  `confirm_release_doc_fallback`, resolving mypy type errors.
+
+### Internal
+- `release.yml`: enhanced ReadTheDocs workflow step — triggers a version sync before
+  activating the new tag, fires explicit builds for both the tagged version and `latest`,
+  adds a step `id` for outcome reporting, and uses `::warning::` annotations and `exit 1`
+  for proper CI failure signaling.
+- `Makefile`: added `ARGS ?=` variable; all `release-*` and `rollback` targets forward
+  `$(ARGS)` to `run.sh`, enabling extra flags from the command line (e.g.
+  `make release-micro ARGS=--dry-run`).
+- `run.sh`: all `release:*` and `rollback` functions now pass `"$@"` through to
+  `scripts/release.py`, consistent with the Makefile `$(ARGS)` change.
+- `scripts/release.py`: added `regenerate_asset_manifest()` function; no-op in projects
+  generated from the template (where `generate_project.skills` is absent), enabling the
+  script to be shared verbatim with the generator repo.
+- `.gitignore`: added `.claude/*` exclusion pattern (synced from generate-project v2.3.0).
+
 ## [1.2.1] - 2026-06-16
 
 Infrastructure-only release. No library API or runtime behavior changes —
