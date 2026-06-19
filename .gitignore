@@ -35,6 +35,9 @@ coverage.xml
 !.vscode/extensions.json
 *.code-workspace
 
+# Claude
+.claude/*
+
 # Project notes (local only)
 notes/
 .tmp_release_docs/

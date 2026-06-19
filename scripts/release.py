@@ -21,6 +21,18 @@ from packaging.version import (
     Version,
 )
 
+try:
+    from generate_project.skills import (
+        manifest_path,
+        write_manifest,
+    )
+except ImportError:
+    # generate_project.skills only exists in the generator repo itself. In projects
+    # generated from this template it is absent, so manifest regeneration becomes a
+    # no-op and this script can be shared verbatim across both.
+    manifest_path = None
+    write_manifest = None
+
 logging.basicConfig(
     level=logging.CRITICAL,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -121,6 +133,24 @@ class RollbackState:
             os.remove(self.PICKLE_FILE)
 
 
+def regenerate_asset_manifest(state: RollbackState) -> None:
+    """Regenerate the bundled Claude asset manifest so every release ships a
+    manifest in sync with the asset tree. Registered for rollback.
+
+    No-op when ``generate_project.skills`` is unavailable (e.g. in projects
+    generated from this template), so this script can be shared verbatim."""
+    if manifest_path is None or write_manifest is None:
+        return
+    path = manifest_path()
+    original = path.read_text() if path.exists() else None
+    state.add_to_backup([(str(path), original)])
+    write_manifest()
+    if path.read_text() != original:
+        print(f"-Regenerated stale asset manifest: {path}")
+    else:
+        print("-Asset manifest already up to date")
+
+
 def create_release(
     release_type: ReleaseType,
     prerelease_type: Optional[PrereleaseType] = None,
@@ -176,6 +206,7 @@ def create_release(
         date = time_stamp.strftime("%Y-%m-%d")
         current_version = get_current_version(project_file)
         state = RollbackState(time_stamp, current_version)
+        regenerate_asset_manifest(state)
         new_version = bump_version(current_version, release_type, prerelease_type, interactive)
         update_version_files(project_file, new_version, state)
         release_docs_path = Path(release_docs) if release_docs else None
@@ -256,16 +287,20 @@ def read_release_doc(
     description = f"{doc_path} for {doc_key.replace('_', ' ')}"
 
     if not release_docs_path.is_dir():
-        return confirm_release_doc_fallback(f"{release_docs_path} does not exist.", interactive)
+        confirm_release_doc_fallback(f"{release_docs_path} does not exist.", interactive)
+        return None
     if not doc_path.exists():
-        return confirm_release_doc_fallback(f"{description} is missing.", interactive)
+        confirm_release_doc_fallback(f"{description} is missing.", interactive)
+        return None
     content = doc_path.read_text()
     if not content.strip():
-        return confirm_release_doc_fallback(f"{description} is empty.", interactive)
+        confirm_release_doc_fallback(f"{description} is empty.", interactive)
+        return None
     if latest_tag_dt is not None:
         doc_mtime = datetime.fromtimestamp(doc_path.stat().st_mtime).astimezone()
         if doc_mtime < latest_tag_dt:
-            return confirm_release_doc_fallback(f"{description} is older than {latest_tag}.", interactive)
+            confirm_release_doc_fallback(f"{description} is older than {latest_tag}.", interactive)
+            return None
     return content
 
 
