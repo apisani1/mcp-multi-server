@@ -1,7 +1,9 @@
-# MCP Multi-Server
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI version](https://img.shields.io/pypi/v/mcp-multi-server.svg)](https://pypi.org/project/mcp-multi-server/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![Documentation Status](https://readthedocs.org/projects/mcp-multi-server/badge/?version=latest)](https://mcp-multi-server.readthedocs.io/en/latest/?badge=latest)
+
+# MCP Multi-Server
 
 A Python library for managing connections to multiple [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers. This library provides a unified interface for discovering, aggregating, and routing capabilities (tools, resources, prompts) across multiple MCP servers.
 
