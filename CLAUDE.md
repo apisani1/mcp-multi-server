@@ -70,6 +70,23 @@ make pre-commit           # Format and lint only on changed files
 
 ```
 
+### Worktree lifecycle
+```bash
+make worktree-setup       # Prepare a freshly created worktree
+make worktree-archive     # Tear down a worktree before archiving
+make worktree-delete      # Guardrail + teardown before deleting a worktree
+```
+
+These back Supacode's `setupScript` / `archiveScript` / `deleteScript` (see `supacode.json`), but
+work standalone too. Each phase runs its generic steps and then `scripts/worktree-<phase>.sh` if
+that file exists and is executable — exit 0 when absent, the hook's exit code when present. Put
+project-specific teardown (stopping docker containers, freeing ports) there; it is not owned by
+the template, so it survives dev-environment syncs.
+
+`worktree-delete` refuses to proceed when the tree is dirty, when commits are reachable from no
+other ref, or when the branch has stash entries — deleting a worktree also deletes its branch, so
+those commits would be lost. Override with `SUPACODE_FORCE_DELETE=1 make worktree-delete`.
+
 ### Testing
 ```bash
 make test                 # Run all tests

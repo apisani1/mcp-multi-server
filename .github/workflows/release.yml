@@ -2,13 +2,14 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
+
   tests:
     uses: ./.github/workflows/tests.yml
 

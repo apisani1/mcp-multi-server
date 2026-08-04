@@ -574,7 +574,7 @@ def update_version_files(project_file: str, new_version: Version, state: Rollbac
                 continue
             content = file.read_text()
             # Build pattern with capturing groups to preserve format
-            pattern = rf'({re.escape(version_key)})(\s*)([:=])(\s*)(["\']?)([^"\'<>\s\n]+)(["\']?)'
+            pattern = rf'({re.escape(version_key)})(\s*)([:=])(\s*)(["\']?)([^"\'<>\s\n)]+)(["\']?)'
 
             def replace_version(match: re.Match) -> str:
                 """Preserve the original format while updating the version."""

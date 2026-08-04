@@ -1,3 +1,6 @@
+# This workflow was inspired by Eric Riddoch's "built-test-publish.yaml"
+# but has been fully re-implemented and adapted for this project.
+
 name: Tests
 
 on:
@@ -12,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10']
+        python-version: ["3.10"]
 
     steps:
       - uses: actions/checkout@v4
