@@ -253,6 +253,10 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
                                 # Returns string content (images are converted to text descriptions)
                                 result_content = process_tool_result_content(tool_result, verbose=verbose)
 
+                                # A failed tool call comes back as an error result, not an exception: tell the user too
+                                if tool_result.isError:
+                                    print(f"[Error] Tool {tool_name} failed: {result_content}\n")
+
                                 # Add tool response to conversation
                                 # Tool messages must always have string content (not arrays)
                                 messages.append(
