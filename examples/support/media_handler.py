@@ -2,9 +2,12 @@
 
 import base64
 import io
+import os
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from mcp.types import (
     AudioContent,
@@ -20,12 +23,33 @@ from PIL.Image import (
 )
 
 
+ALLOWED_URI_SCHEMES = ("http", "https")
+FILES_ROOT_ENV = "MCP_EXAMPLES_FILES_ROOT"
+
+
+def resolve_safe_path(file_path: str) -> str:
+    """Resolve ``file_path`` and ensure it stays inside the allowed files root.
+
+    The root is the ``MCP_EXAMPLES_FILES_ROOT`` environment variable, or the current working directory
+    when it is unset. Paths are resolved first (following symlinks, ``..`` and absolute paths), so
+    a tool argument chosen by an LLM cannot read arbitrary files such as ``~/.ssh/id_rsa``.
+
+    Raises:
+        PermissionError: If the resolved path is outside the allowed root.
+    """
+    root = Path(os.environ.get(FILES_ROOT_ENV) or Path.cwd()).resolve()
+    resolved = (root / file_path).resolve()  # an absolute file_path replaces root, and is checked below
+    if not resolved.is_relative_to(root):
+        raise PermissionError(f"Access denied: {file_path!r} is outside the allowed directory {str(root)!r}")
+    return str(resolved)
+
+
 def get_image(image_path: str) -> tuple[str, str]:
     """
     Load an image from the given path, resize it to a maximum of 1024x1024 pixels,
     convert it to PNG format, and return its base64-encoded data along with the MIME type.
     """
-    img: Image = PilImage.open(image_path)
+    img: Image = PilImage.open(resolve_safe_path(image_path))
     img.thumbnail((1024, 1024))  # Resize to max 1024x1024
 
     # Convert to RGB to ensure consistent format
@@ -44,9 +68,7 @@ def get_audio(audio_path: str) -> tuple[str, str]:
     """ "
     Load an audio file from the given path and return its base64-encoded data along with the MIME type.
     """
-    import os
-
-    with open(audio_path, "rb") as audio_file:
+    with open(resolve_safe_path(audio_path), "rb") as audio_file:
         audio_data = audio_file.read()
 
     # Get file extension and determine MIME type
@@ -69,7 +91,6 @@ def get_audio(audio_path: str) -> tuple[str, str]:
 
 def open_file_with_system_default(file_path: str) -> None:
     """Open a file with the system's default application."""
-    import os
     import platform
     import subprocess
 
@@ -208,8 +229,13 @@ def decode_binary_file(embedded_resource: EmbeddedResource, output_path: str) ->
 
 def load_content_from_uri(resource_link: ResourceLink) -> bytes:
     """Load content from a URI and return the raw bytes."""
+    uri = str(resource_link.uri)
+    scheme = urllib.parse.urlparse(uri).scheme.lower()
+    if scheme not in ALLOWED_URI_SCHEMES:
+        # urlopen would also follow file:// and custom schemes, letting a server read local files
+        raise ValueError(f"Refusing to load URI with scheme {scheme!r} (allowed: {', '.join(ALLOWED_URI_SCHEMES)})")
     try:
-        with urllib.request.urlopen(str(resource_link.uri)) as response:
+        with urllib.request.urlopen(uri) as response:
             content = response.read()
             return content
     except urllib.error.URLError as e:

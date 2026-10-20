@@ -23,11 +23,13 @@ try:
     from ..support.media_handler import (
         get_audio,
         get_image,
+        resolve_safe_path,
     )
 except ImportError:
     from examples.support.media_handler import (
         get_audio,
         get_image,
+        resolve_safe_path,
     )
 
 
@@ -119,6 +121,7 @@ def load_audio(file_path: str) -> List[Message]:
 @mcp.prompt()
 def load_file(file_path: str) -> List[Message]:
     """Loads a file and returns its contents as an embedded resource."""
+    file_path = resolve_safe_path(file_path)
     with open(file_path, "rb") as file:
         file_data = file.read()
     encoded = base64.b64encode(file_data).decode("utf-8")
