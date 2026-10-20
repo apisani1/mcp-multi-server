@@ -27,7 +27,6 @@ htmlcov/
 coverage.xml
 
 # VS Code
-.vscode/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -51,7 +50,11 @@ ENV/
 # Misc
 .DS_Store
 *.pkl
+.before_last_release.json
 *.pickle
+
+# Project-specific
+.vscode/
 
 # sdk-migration-manager skill — test workspace and run artifacts (local only)
 .claude/skills/sdk-migration-manager-workspace/

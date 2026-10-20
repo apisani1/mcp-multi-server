@@ -1,4 +1,4 @@
-.PHONY: all format lint lint-mypy lint-flake8 lint-pylint worktree-setup worktree-archive worktree-delete test tests test-manual help clean build publish publish-test publish-strict publish-test-strict docs docs-live docs-check release-major release-minor release-micro release-rc release-beta release-alpha release-major-a release-major-b release-major-rc release-minor-a release-minor-b release-minor-rc release-micro-a release-micro-b release-micro-rc rollback venv venv-clean run mcp-config mcp-dev
+.PHONY: all format lint lint-mypy lint-flake8 lint-pylint run worktree-setup worktree-archive worktree-delete test tests test-manual help clean build publish publish-test publish-strict publish-test-strict docs docs-live docs-check release-major release-minor release-micro release-rc release-beta release-alpha release-major-a release-major-b release-major-rc release-minor-a release-minor-b release-minor-rc release-micro-a release-micro-b release-micro-rc rollback venv venv-clean run-chat run-sync-chat run-tool-server run-resource-server run-prompt-server mcp-config mcp-dev
 
 ######################
 # This automation tasks were inspired by automation patterns from
@@ -104,6 +104,14 @@ check:
 # Pre-commit check
 pre-commit:
 	@./run.sh pre:commit
+
+######################
+# RUN
+######################
+
+# Run the application, or an example of the library
+run:
+	@./run.sh run $(ARGS)
 
 ######################
 # WORKTREE LIFECYCLE
@@ -348,25 +356,6 @@ run-resource-server:
 run-prompt-server:
 	@uv run python3 -m examples.servers.prompt_server
 
-# Generic run command - runs any Python module
-# Usage: make run <module.path>
-# Example: make run examples.client.chat_client
-run:
-	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
-		echo "Usage: make run <module.path>"; \
-		echo ""; \
-		echo "Examples:"; \
-		echo "  make run examples.client.chat_client"; \
-		echo "  make run examples.servers.tool_server"; \
-		echo "  make run mcp_multi_server.client"; \
-		echo ""; \
-		echo "Or use convenience targets:"; \
-		echo "  make run-chat"; \
-		echo "  make run-tool-client"; \
-		exit 1; \
-	fi
-	@uv run python3 -m $(filter-out $@,$(MAKECMDGOALS))
-
 # Generate MCP server configuration
 mcp-config:
 	@python3 scripts/mcp_config.py $(filter-out $@,$(MAKECMDGOALS))
@@ -405,6 +394,10 @@ help:
 	@echo '  make check                - Run format, lint, and test'
 	@echo '  make pre-commit           - Run format and lint on changed files'
 	@echo ''
+	@echo 'Run:'
+	@echo '  make run                  - Run the app, or an example of the library'
+	@echo '  make run ARGS="--flag"    - Run with arguments'
+	@echo ''
 	@echo 'Worktree lifecycle:'
 	@echo '  make worktree-setup       - Prepare a freshly created worktree'
 	@echo '  make worktree-archive     - Tear down a worktree before archiving'
@@ -432,10 +425,13 @@ help:
 	@echo '  make publish-test         - Publish to TestPyPI'
 	@echo '  make publish              - Publish to PyPI'
 	@echo ''
-	@echo 'Execution:'
-	@echo '  make run <module.path>    - Run any Python module'
-	@echo '                              Example: make run examples.client.chat_client'
+	@echo 'Release:'
+	@echo '  make release-major        - Create major release'
+	@echo '  make release-minor        - Create minor release'
+	@echo '  make release-micro        - Create micro release'
+	@echo '  make help-release         - Show detailed release commands'
 	@echo ''
+	@echo 'Execution:'
 	@echo '  Convenience targets:'
 	@echo '  make run-chat             - Run MCP multi-server chat client (with OpenAI)'
 	@echo '                              Optional: ARGS="--verbose --model gpt-4-turbo"'
@@ -446,9 +442,3 @@ help:
 	@echo 'MCP Tools:'
 	@echo '  make mcp-config <filename> [config_file]  - Generate MCP server config'
 	@echo '  make mcp-dev <filename> [args...]  - Run MCP inspector on server'
-	@echo ''
-	@echo 'Release:'
-	@echo '  make release-major        - Create major release'
-	@echo '  make release-minor        - Create minor release'
-	@echo '  make release-micro        - Create micro release'
-	@echo '  make help-release         - Show detailed release commands'
