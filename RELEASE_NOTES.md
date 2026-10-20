@@ -1,21 +1,10 @@
-## MCP Multi-Server v1.2.3
+## MCP Multi-Server v1.2.4
 
-Infrastructure-only release: no changes to the library API or runtime behavior. It syncs the development and release tooling with generate-project v2.5.0 and hardens CI and release scripts.
+CI-only release: GitHub Actions dependencies were updated by Dependabot. There are no changes to the library, its API, or its packaging.
 
-### Changed
-- **`make run` now takes `ARGS`**: use `make run ARGS="examples.client.chat_client"` instead of `make run examples.client.chat_client`. New shortcuts: `make run-chat`, `run-tool-server`, `run-resource-server`, `run-prompt-server`.
-- `run.sh` recreates a `.venv` copied from another checkout instead of silently using the original one.
+### Internal
+- `actions/checkout` → v7
+- `astral-sh/setup-uv` 5.4.2 → 10.3.0
+- `actions/cache` 4.3.0 → 6.1.0
 
-### Added
-- Worktree lifecycle targets (`worktree-setup`, `worktree-archive`, `worktree-delete`).
-- Claude PR Assistant workflow and Dependabot configuration.
-
-### Security
-- GitHub workflows pin actions to commit SHAs and no longer interpolate context values into shell scripts.
-- Release rollback state is stored as JSON rather than pickle.
-- The skills installer rejects manifest paths that could escape the destination directory.
-
-### Documentation
-- README gains PyPI, Python and ReadTheDocs badges.
-
-**Full changelog**: https://github.com/apisani1/mcp-multi-server/compare/v1.2.2...v1.2.3
+**Full changelog**: https://github.com/apisani1/mcp-multi-server/compare/v1.2.3...v1.2.4

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.4] - 2026-10-20
+
+CI-only release. No library API, packaging, or runtime behavior changes.
+
+### Internal
+- Bumped `actions/checkout` to v7 in `claude.yml`.
+- Bumped `astral-sh/setup-uv` from 5.4.2 to 10.3.0 in the docs, release and tests workflows.
+- Bumped `actions/cache` from 4.3.0 to 6.1.0 in the docs, release and tests workflows.
+
 ## [1.2.3] - 2026-10-20
 
 Infrastructure-only release. No library API or runtime behavior changes.
