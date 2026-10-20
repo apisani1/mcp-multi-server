@@ -23,18 +23,21 @@ try:
     from ..support.media_handler import (
         get_audio,
         get_image,
+        quiet_access_denied_tracebacks,
         resolve_safe_path,
     )
 except ImportError:
     from examples.support.media_handler import (
         get_audio,
         get_image,
+        quiet_access_denied_tracebacks,
         resolve_safe_path,
     )
 
 
 # Create server
 mcp = FastMCP("Inventory Prompt Server")
+quiet_access_denied_tracebacks()
 
 
 @mcp._mcp_server.set_logging_level()

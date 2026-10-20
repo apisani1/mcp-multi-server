@@ -2,6 +2,7 @@
 
 import base64
 import io
+import logging
 import os
 import tempfile
 import urllib.error
@@ -42,6 +43,35 @@ def resolve_safe_path(file_path: str) -> str:
     if not resolved.is_relative_to(root):
         raise PermissionError(f"Access denied: {file_path!r} is outside the allowed directory {str(root)!r}")
     return str(resolved)
+
+
+class _AccessDeniedFilter(logging.Filter):
+    """Drop the stack trace from a log record caused by ``resolve_safe_path`` denying access.
+
+    The denial is an expected, already-reported outcome, so the one-line message is enough.
+    All other errors keep their full traceback.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc: BaseException | None = record.exc_info[1] if record.exc_info else None
+        while exc is not None:
+            if isinstance(exc, PermissionError):
+                record.exc_info = None
+                record.exc_text = None
+                record.msg = f"{record.msg}: {exc}"
+                record.args = ()
+                break
+            exc = exc.__cause__ or exc.__context__
+        return True
+
+
+def quiet_access_denied_tracebacks(logger_name: str = "mcp.server.fastmcp.server") -> None:
+    """Log ``resolve_safe_path`` denials as a single line instead of a full traceback.
+
+    FastMCP logs every exception raised while rendering a prompt with ``logger.exception``, which
+    prints a traceback on the server's stderr (the client's terminal).
+    """
+    logging.getLogger(logger_name).addFilter(_AccessDeniedFilter())
 
 
 def get_image(image_path: str) -> tuple[str, str]:
