@@ -4,6 +4,7 @@ This module provides shared functionality for handling MCP content blocks,
 converting between MCP and OpenAI formats, and user interaction helpers.
 """
 
+import base64
 from typing import (
     Any,
     Dict,
@@ -28,6 +29,31 @@ from mcp.types import (
     TextContent,
 )
 from mcp_multi_server.utils import extract_template_variables
+
+MAX_INLINE_TEXT_CHARS = 20000
+TEXT_MIME_TYPES = ("application/json", "application/xml", "application/x-yaml", "application/yaml")
+
+
+def embedded_resource_text(content_block: EmbeddedResource) -> Union[str, None]:
+    """Return the text of an embedded resource, decoding text-like blobs, or None if it is binary.
+
+    Servers such as the example ``get_file`` tool return every file as a base64 blob, even
+    plain text. Decode text-like MIME types so the LLM sees the content instead of a
+    placeholder, truncating very large files.
+    """
+    resource = content_block.resource
+    if hasattr(resource, "text"):
+        return resource.text  # type: ignore[union-attr, no-any-return]
+    mime_type = (resource.mimeType or "").split(";", 1)[0].strip().lower()
+    if not (mime_type.startswith("text/") or mime_type in TEXT_MIME_TYPES):
+        return None
+    try:
+        text = base64.b64decode(resource.blob).decode("utf-8")  # type: ignore[union-attr]
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if len(text) > MAX_INLINE_TEXT_CHARS:
+        return text[:MAX_INLINE_TEXT_CHARS] + f"\n[... truncated, {len(text) - MAX_INLINE_TEXT_CHARS} more characters]"
+    return text
 
 
 def handle_content_block(
@@ -87,8 +113,9 @@ def convert_mcp_content_to_tool_response(
         return {"type": "text", "text": f"[Audio: {content_block.mimeType} received]"}
 
     if isinstance(content_block, EmbeddedResource):
-        if hasattr(content_block.resource, "text"):
-            return {"type": "text", "text": content_block.resource.text}
+        text = embedded_resource_text(content_block)
+        if text is not None:
+            return {"type": "text", "text": text}
         return {"type": "text", "text": "[Embedded resource: binary data received]"}
 
     if isinstance(content_block, ResourceLink):
@@ -133,8 +160,9 @@ def convert_mcp_content_to_message(
         ]
 
     if isinstance(content_block, EmbeddedResource):
-        if hasattr(content_block.resource, "text"):
-            return content_block.resource.text
+        text = embedded_resource_text(content_block)
+        if text is not None:
+            return text
         # TODO: Handle other embedded resource types appropriately
         content_block_text = str(content_block.resource)
         return f"[Embedded resource: {content_block_text[:min(80, len(content_block_text))]}]"
