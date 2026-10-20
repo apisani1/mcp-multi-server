@@ -23,16 +23,21 @@ try:
     from ..support.media_handler import (
         get_audio,
         get_image,
+        quiet_access_denied_tracebacks,
+        resolve_safe_path,
     )
 except ImportError:
     from examples.support.media_handler import (
         get_audio,
         get_image,
+        quiet_access_denied_tracebacks,
+        resolve_safe_path,
     )
 
 
 # Create server
 mcp = FastMCP("Inventory Prompt Server")
+quiet_access_denied_tracebacks()
 
 
 @mcp._mcp_server.set_logging_level()
@@ -119,6 +124,7 @@ def load_audio(file_path: str) -> List[Message]:
 @mcp.prompt()
 def load_file(file_path: str) -> List[Message]:
     """Loads a file and returns its contents as an embedded resource."""
+    file_path = resolve_safe_path(file_path)
     with open(file_path, "rb") as file:
         file_data = file.read()
     encoded = base64.b64encode(file_data).decode("utf-8")

@@ -40,7 +40,10 @@ from mcp_multi_server.utils import (
     print_capabilities_summary,
     substitute_template_variables,
 )
-from openai import OpenAI
+from openai import (
+    OpenAI,
+    OpenAIError,
+)
 
 
 load_dotenv(find_dotenv())
@@ -163,7 +166,12 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
                 # Add user message, prompt or resource
                 if query.startswith("+prompt:"):
                     prompt = query[len("+prompt:") :].strip()
-                    prompt_messages = search_and_instantiate_prompt(client, all_prompts, prompt)
+                    try:
+                        prompt_messages = search_and_instantiate_prompt(client, all_prompts, prompt)
+                    except Exception as e:  # a server-side error must not end the chat session
+                        print(f"Error retrieving prompt '{prompt}': {e}")
+                        query = input("> ")
+                        continue
                     if prompt_messages:
                         if verbose:
                             print("****Retrieved prompt content (displayed above)\n")
@@ -176,7 +184,12 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
 
                 if query.startswith("+resource:"):
                     resource_name = query[len("+resource:") :].strip()
-                    resource = search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
+                    try:
+                        resource = search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
+                    except Exception as e:  # a server-side error must not end the chat session
+                        print(f"Error retrieving resource '{resource_name}': {e}")
+                        query = input("> ")
+                        continue
                     if resource:
                         if verbose:
                             print("****Retrieved resource content (displayed above)\n")
@@ -188,9 +201,14 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
 
                 if query.startswith("+template:"):
                     template_name = query[len("+template:") :].strip()
-                    resource = search_and_instantiate_resource(
-                        client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
-                    )
+                    try:
+                        resource = search_and_instantiate_resource(
+                            client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
+                        )
+                    except Exception as e:  # a server-side error must not end the chat session
+                        print(f"Error retrieving resource template '{template_name}': {e}")
+                        query = input("> ")
+                        continue
                     if resource:
                         if verbose:
                             print("****Instantiated template content (displayed above)\n")
@@ -200,58 +218,11 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
                     query = input("> ")
                     continue
 
-                messages.append({"role": "user", "content": query})
+                turn_start = len(messages)
+                try:
+                    messages.append({"role": "user", "content": query})
 
-                # Make OpenAI LLM call to answer the user query
-                response = openai_client.chat.completions.create(  # type: ignore[call-overload]
-                    model=model,
-                    messages=messages,
-                    tools=openai_tools if openai_tools else None,
-                    tool_choice="auto" if openai_tools else None,
-                ).choices[0]
-
-                # Handle tool calls
-                while response.finish_reason == "tool_calls":
-                    messages.append(response.message)
-
-                    for tool_call in response.message.tool_calls:
-                        tool_name = tool_call.function.name
-                        tool_args = json.loads(tool_call.function.arguments)
-
-                        if verbose:
-                            print(f"****[Tool Call] {tool_name}")
-                            print(f"****[Arguments] {json.dumps(tool_args, indent=2)}")
-
-                        # Execute tool via appropriate server
-                        try:
-                            tool_result = client.call_tool(tool_name, tool_args)
-
-                            # Process tool result content (handles images, audio, text, etc.)
-                            # Returns string content (images are converted to text descriptions)
-                            result_content = process_tool_result_content(tool_result, verbose=verbose)
-
-                            # Add tool response to conversation
-                            # Tool messages must always have string content (not arrays)
-                            messages.append(
-                                {
-                                    "role": "tool",
-                                    "tool_call_id": tool_call.id,
-                                    "content": result_content,
-                                }
-                            )
-
-                        except Exception as e:
-                            error_msg = f"Error executing tool {tool_name}: {str(e)}"
-                            print(f"[Error] {error_msg}\n")
-                            messages.append(
-                                {
-                                    "role": "tool",
-                                    "tool_call_id": tool_call.id,
-                                    "content": error_msg,
-                                }
-                            )
-
-                    # Get next response from LLM with tool results
+                    # Make OpenAI LLM call to answer the user query
                     response = openai_client.chat.completions.create(  # type: ignore[call-overload]
                         model=model,
                         messages=messages,
@@ -259,9 +230,65 @@ def sync_chat(config_path: str = "examples/mcp_servers.json", verbose: bool = Fa
                         tool_choice="auto" if openai_tools else None,
                     ).choices[0]
 
-                # Print assistant response
-                print(f"\n\033[34m{response.message.content}\033[0m\n")
-                messages.append(response.message)
+                    # Handle tool calls
+                    while response.finish_reason == "tool_calls":
+                        messages.append(response.message)
+
+                        for tool_call in response.message.tool_calls:
+                            tool_name = tool_call.function.name
+                            tool_args = json.loads(tool_call.function.arguments)
+
+                            if verbose:
+                                print(f"****[Tool Call] {tool_name}")
+                                print(f"****[Arguments] {json.dumps(tool_args, indent=2)}")
+
+                            # Execute tool via appropriate server
+                            try:
+                                tool_result = client.call_tool(tool_name, tool_args)
+
+                                # Process tool result content (handles images, audio, text, etc.)
+                                # Returns string content (images are converted to text descriptions)
+                                result_content = process_tool_result_content(tool_result, verbose=verbose)
+
+                                # A failed tool call comes back as an error result, not an exception: tell the user too
+                                if tool_result.isError:
+                                    print(f"[Error] Tool {tool_name} failed: {result_content}\n")
+
+                                # Add tool response to conversation
+                                # Tool messages must always have string content (not arrays)
+                                messages.append(
+                                    {
+                                        "role": "tool",
+                                        "tool_call_id": tool_call.id,
+                                        "content": result_content,
+                                    }
+                                )
+
+                            except Exception as e:
+                                error_msg = f"Error executing tool {tool_name}: {str(e)}"
+                                print(f"[Error] {error_msg}\n")
+                                messages.append(
+                                    {
+                                        "role": "tool",
+                                        "tool_call_id": tool_call.id,
+                                        "content": error_msg,
+                                    }
+                                )
+
+                        # Get next response from LLM with tool results
+                        response = openai_client.chat.completions.create(  # type: ignore[call-overload]
+                            model=model,
+                            messages=messages,
+                            tools=openai_tools if openai_tools else None,
+                            tool_choice="auto" if openai_tools else None,
+                        ).choices[0]
+
+                    # Print assistant response
+                    print(f"\n\033[34m{response.message.content}\033[0m\n")
+                    messages.append(response.message)
+                except OpenAIError as e:  # e.g. invalid API key, rate limit, network failure
+                    print(f"[Error] OpenAI request failed: {e}\n")
+                    del messages[turn_start:]  # drop this turn so the conversation stays consistent
 
                 # Get next user input
                 query = input("> ")

@@ -197,6 +197,25 @@ class DatabaseSchema(BaseModel):
     description: str
 
 
+# Globals a saved database may reference. Anything else (os.system, subprocess.Popen, ...) is refused, so a
+# tampered pickle file cannot run code when it is loaded.
+_ALLOWED_STDLIB_GLOBALS = {("datetime", "datetime"), ("decimal", "Decimal"), ("uuid", "UUID")}
+_MODEL_MODULES = {"inventory_db", "examples.support.inventory_db", __name__}
+_MODEL_CLASSES = {"Supplier", "Product", "SupplierProduct", "InventoryItem", "ItemStatus"}
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    """Unpickler that only resolves the types an InventoryDatabase file contains."""
+
+    def find_class(self, module: str, name: str) -> Any:
+        if (module, name) in _ALLOWED_STDLIB_GLOBALS:
+            return super().find_class(module, name)
+        # Older files were saved when this module was imported as 'inventory_db'
+        if module in _MODEL_MODULES and name in _MODEL_CLASSES:
+            return globals()[name]
+        raise pickle.UnpicklingError(f"Refusing to load {module}.{name} from the database file")
+
+
 class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Normalized in-memory inventory database with CRUD operations.
 
@@ -251,16 +270,8 @@ class InventoryDatabase:  # pylint: disable=too-many-instance-attributes,too-man
         Raises:
             Exception: If loading fails (propagates pickle exceptions)
         """
-        # Custom unpickler to handle module name changes
-        class RenameUnpickler(pickle.Unpickler):
-            def find_class(self, module: str, name: str) -> Any:
-                # Handle old module name 'inventory_db' -> 'examples.support.inventory_db'
-                if module == "inventory_db":
-                    module = "examples.support.inventory_db"
-                return super().find_class(module, name)
-
         with open(filepath, "rb") as f:
-            state = RenameUnpickler(f).load()
+            state = _RestrictedUnpickler(f).load()
 
         # Restore all attributes from saved state
         self._categories = state["categories"]

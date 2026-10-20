@@ -38,6 +38,7 @@ try:
     from ..support.media_handler import (
         get_audio,
         get_image,
+        resolve_safe_path,
     )
     from .resource_server import (
         get_category_statistics,
@@ -85,6 +86,7 @@ except ImportError:
     from examples.support.media_handler import (
         get_audio,
         get_image,
+        resolve_safe_path,
     )
 
 # Create server
@@ -1263,6 +1265,7 @@ def get_file_tool(file_path: str) -> CallToolResult:
         - File contents are base64-encoded for safe transmission
         - For images use get_image, for audio use get_audio (they provide optimized formats)
     """
+    file_path = resolve_safe_path(file_path)
     with open(file_path, "rb") as file:
         file_data = file.read()
     encoded = base64.b64encode(file_data).decode("utf-8")
