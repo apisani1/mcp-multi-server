@@ -87,6 +87,19 @@ the template, so it survives dev-environment syncs.
 other ref, or when the branch has stash entries — deleting a worktree also deletes its branch, so
 those commits would be lost. Override with `SUPACODE_FORCE_DELETE=1 make worktree-delete`.
 
+### Running
+```bash
+make run ARGS="examples.client.chat_client"   # Run any Python module (via scripts/run.sh)
+make run-chat             # Run the example chat client
+make run-tool-server      # Run an example server (also run-resource-server, run-prompt-server)
+```
+
+`make run` dispatches in order: `scripts/run.sh` if it exists and is executable, then the console
+script entry point if `src/mcp_multi_server/main.py` exists, then `examples/main.py`. This project
+uses `scripts/run.sh` to run an arbitrary module (`uv run python3 -m <module>`). That file is not
+owned by the template, so it survives dev-environment syncs. Do not hand-edit the `run` function in
+`run.sh` or the `run` target in the `Makefile`.
+
 ### Testing
 ```bash
 make test                 # Run all tests
