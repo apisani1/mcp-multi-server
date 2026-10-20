@@ -166,7 +166,12 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
                 # Add user message, prompt or resource
                 if query.startswith("+prompt:"):
                     prompt = query[len("+prompt:") :].strip()
-                    prompt_messages = await search_and_instantiate_prompt(client, all_prompts, prompt)
+                    try:
+                        prompt_messages = await search_and_instantiate_prompt(client, all_prompts, prompt)
+                    except Exception as e:  # a server-side error must not end the chat session
+                        print(f"Error retrieving prompt '{prompt}': {e}")
+                        query = input("> ")
+                        continue
                     if prompt_messages:
                         if verbose:
                             print("****Retrieved prompt content (displayed above)\n")
@@ -179,7 +184,12 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
                 if query.startswith("+resource:"):
                     resource_name = query[len("+resource:") :].strip()
-                    resource = await search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
+                    try:
+                        resource = await search_and_instantiate_resource(client, all_resources, resource_name)  # type: ignore[arg-type]
+                    except Exception as e:  # a server-side error must not end the chat session
+                        print(f"Error retrieving resource '{resource_name}': {e}")
+                        query = input("> ")
+                        continue
                     if resource:
                         if verbose:
                             print("****Retrieved resource content (displayed above)\n")
@@ -191,9 +201,14 @@ async def chat(config_path: str = "examples/mcp_servers.json", verbose: bool = F
 
                 if query.startswith("+template:"):
                     template_name = query[len("+template:") :].strip()
-                    resource = await search_and_instantiate_resource(
-                        client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
-                    )
+                    try:
+                        resource = await search_and_instantiate_resource(
+                            client, all_resource_templates, template_name, is_template=True  # type: ignore[arg-type]
+                        )
+                    except Exception as e:  # a server-side error must not end the chat session
+                        print(f"Error retrieving resource template '{template_name}': {e}")
+                        query = input("> ")
+                        continue
                     if resource:
                         if verbose:
                             print("****Instantiated template content (displayed above)\n")
