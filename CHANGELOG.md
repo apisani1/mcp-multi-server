@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.2.3] - 2026-10-20
+
+Infrastructure-only release. No library API or runtime behavior changes.
+
+### Changed
+- `make run` now takes its module via `ARGS` (e.g. `make run ARGS="examples.client.chat_client"`)
+  instead of a positional argument. It dispatches to `scripts/run.sh`, then the console script,
+  then `examples/main.py`.
+- `run.sh`: always operates on this checkout's venv, and recreates a `.venv` copied from another
+  checkout (e.g. by git worktree helpers) rather than silently activating the original one.
+- `pyproject.toml`: mypy `exclude` broadened to skip the `tests/` and `docs/` directories.
+
+### Added
+- `make run-chat`, `run-tool-server`, `run-resource-server` and `run-prompt-server` targets.
+- Worktree lifecycle targets: `make worktree-setup`, `worktree-archive`, `worktree-delete`
+  (with a guardrail against deleting trees with unique commits, stashes or dirty state), plus
+  `supacode.json` and `scripts/run.sh`.
+- Claude PR Assistant GitHub workflow and Dependabot configuration.
+
+### Security
+- GitHub workflows: actions pinned to commit SHAs, and `${{ }}` context values passed via `env:`
+  rather than interpolated into shell scripts.
+- `scripts/release.py`: rollback state is now stored as JSON (`.before_last_release.json`)
+  instead of a pickle file, so loading it cannot execute code.
+- `scripts/install_claude_skills.py`: manifest entries are validated and refused if they could
+  escape the destination directory.
+
+### Documentation
+- README: added PyPI, Python and ReadTheDocs badges.
+- CLAUDE.md: documented `make run` and worktree lifecycle commands.
+
+### Internal
+- Synced dev environment with generate-project v2.5.0 (`Makefile`, `run.sh`, workflows,
+  `.gitignore`).
+
 ## [1.2.2] - 2026-06-19
 
 Infrastructure-only release. No library API or runtime behavior changes.

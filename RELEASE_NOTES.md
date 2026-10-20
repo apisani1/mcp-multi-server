@@ -1,35 +1,21 @@
-# mcp-multi-server v1.2.2
+## MCP Multi-Server v1.2.3
 
-Infrastructure-only release. **No library API or runtime behavior changes.**
-If you install `mcp-multi-server` with `pip` or `uv`, this release is
-functionally identical to `1.2.1`.
+Infrastructure-only release: no changes to the library API or runtime behavior. It syncs the development and release tooling with generate-project v2.5.0 and hardens CI and release scripts.
 
-## What changed
+### Changed
+- **`make run` now takes `ARGS`**: use `make run ARGS="examples.client.chat_client"` instead of `make run examples.client.chat_client`. New shortcuts: `make run-chat`, `run-tool-server`, `run-resource-server`, `run-prompt-server`.
+- `run.sh` recreates a `.venv` copied from another checkout instead of silently using the original one.
 
-### Bug fixes
+### Added
+- Worktree lifecycle targets (`worktree-setup`, `worktree-archive`, `worktree-delete`).
+- Claude PR Assistant workflow and Dependabot configuration.
 
-- **CI: pip install name corrected** — the TestPyPI smoke-test step in `release.yml`
-  was calling `pip install mcp_multi_server` (underscore), which would fail to resolve
-  the package on PyPI. Fixed to `mcp-multi-server`.
+### Security
+- GitHub workflows pin actions to commit SHAs and no longer interpolate context values into shell scripts.
+- Release rollback state is stored as JSON rather than pickle.
+- The skills installer rejects manifest paths that could escape the destination directory.
 
-- **Coverage path fix** — `run.sh tests:cov` was passing `--cov=mcp_multi_server`
-  instead of `--cov=src/mcp_multi_server`, causing coverage to report against the wrong
-  path. Fixed.
+### Documentation
+- README gains PyPI, Python and ReadTheDocs badges.
 
-- **`scripts/release.py` mypy fix** — `read_release_doc` early-exit branches now
-  explicitly return `None` rather than forwarding the return value of
-  `confirm_release_doc_fallback`, resolving type errors reported by mypy.
-
-### Internal improvements
-
-- **ReadTheDocs CI workflow** now syncs available versions before activating the new
-  tag, then triggers explicit builds for both the tagged version and `latest`. The step
-  has a proper `id` for outcome-based reporting in the Release Summary, and uses
-  `::warning::` annotations and `exit 1` for correct CI failure signaling.
-
-- **`make release-*` / `make rollback` accept extra args** via a new `ARGS ?=` Makefile
-  variable (forwarded as `$(ARGS)` to `run.sh`, which in turn passes `"$@"` through to
-  `scripts/release.py`). Example: `make release-micro ARGS=--dry-run`.
-
-- Synced dev environment with `apisani1/generate-project` v2.3.0 (`.gitignore`
-  `.claude/*` pattern, `regenerate_asset_manifest()` stub in `scripts/release.py`).
+**Full changelog**: https://github.com/apisani1/mcp-multi-server/compare/v1.2.2...v1.2.3
