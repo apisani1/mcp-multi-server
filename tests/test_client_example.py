@@ -9,6 +9,8 @@ Note: These are integration tests that require actual MCP servers to be running.
       Use `pytest -m "not integration"` to skip these tests (default in CI).
 """
 
+from pathlib import Path
+
 import pytest
 
 from examples.client.chat_client import (
@@ -51,8 +53,21 @@ async def test_file_tool() -> None:
 
         tool_result = await client.call_tool("get_file", {"file_path": "examples/assets/document.txt"})
 
+        # Text files are returned as a base64 blob; the client decodes them for the LLM
         result_content = process_tool_result_content(tool_result, False)
-        assert result_content == "[Embedded resource: binary data received]"
+        assert result_content == Path("examples/assets/document.txt").read_text(encoding="utf-8")
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_file_tool_denies_paths_outside_root() -> None:
+    """Test that get_file refuses to read files outside the allowed directory."""
+    async with MultiServerClient.from_config("examples/mcp_servers.json") as client:
+
+        tool_result = await client.call_tool("get_file", {"file_path": "/etc/passwd"})
+
+        assert tool_result.isError
+        assert "Access denied" in process_tool_result_content(tool_result, False)
 
 
 @pytest.mark.integration
