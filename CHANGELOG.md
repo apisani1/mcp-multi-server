@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.2.5] - 2026-10-20
+
+Security-hardening release. The library API (`src/mcp_multi_server`) is unchanged; fixes are in the
+example code and dependency floors.
+
+### Security
+- Example servers now restrict file reads to `MCP_EXAMPLES_FILES_ROOT` (default: the current
+  working directory); paths outside it are denied.
+- `media_handler` only fetches `http(s)` resource links (no `file://` or custom schemes).
+- The inventory database unpickler is now an allow-list (datetime, Decimal, UUID and the inventory
+  model classes, including files saved under the old `inventory_db` module name). Anything else
+  raises `UnpicklingError` instead of executing.
+- Refreshed vulnerable locked dependencies; `claude.yml` actions pinned to commit SHAs.
+
+### Changed
+- Minimum `mcp` raised from 1.27.1 to 1.30.0.
+- `examples` extra: `pillow` now `>=12.3.0,<14.0.0` (was `>=10.0.0,<11.0.0`).
+- Example chat clients pass the contents of text-like embedded file blobs (size-capped) to the LLM
+  instead of a "binary data received" placeholder.
+
+### Fixed
+- Example chat clients no longer end the session with a traceback on OpenAI API errors or
+  prompt/resource retrieval errors; they report the error and return to the prompt.
+- Failed tool results (`isError`) are now shown to the user in the example chat clients.
+- Denied example file access is logged as a single line rather than a stack trace.
+
+### Internal
+- Added tests for the inventory unpickler (round trip and malicious pickle) and a path-denial
+  integration test; updated `test_file_tool` for decoded text files.
+
 ## [1.2.4] - 2026-10-20
 
 CI-only release. No library API, packaging, or runtime behavior changes.
